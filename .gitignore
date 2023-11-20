@@ -1,3 +1,6 @@
+*~
+.cache
+.vscode
 .idea
 .project
 benchmarks/mir_perf_framework_setup.py
@@ -9,5 +12,7 @@ build-*
 cmake-*
 build
 benchmarks/build
-
+.dir-locals.el
 tools/bot-data.tar.xz
+.clangd
+compile_commands.json
