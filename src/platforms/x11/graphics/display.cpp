@@ -124,9 +124,11 @@ mgx::Display::Display(
             title,
             actual_size);
         auto pf = x11_resources->conn->default_pixel_format();
+        auto refresh = x11_resources->conn->get_output_refresh_rate();
         auto configuration = DisplayConfiguration::build_output(
             pf,
             actual_size,
+            refresh,
             top_left,
             geom::Size{
                 actual_size.width * pixel_size_mm.width.as_value(),
@@ -137,8 +139,7 @@ mgx::Display::Display(
             x11_resources->conn->connection(),
             *window,
             this->egl,
-            configuration->extents(),
-            actual_size);
+            configuration->extents());
         top_left.x += as_delta(configuration->extents().size.width);
         outputs.push_back(std::make_unique<OutputInfo>(
             this,

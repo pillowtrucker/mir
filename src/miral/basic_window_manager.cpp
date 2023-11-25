@@ -202,6 +202,10 @@ void miral::BasicWindowManager::modify_surface(
     WindowSpecification mods{modifications};
     validate_modification_request(mods, info);
     place_and_size_for_state(mods, info);
+    if (!mods.state() && info.state() == mir_window_state_fullscreen)
+    {
+        if (mods.size().is_set()) mods.size().consume();
+    }
     policy->handle_modify_window(info, mods);
 }
 
@@ -938,29 +942,26 @@ auto miral::BasicWindowManager::active_application_zone() -> Zone
     return active_display_area()->application_zone;
 }
 
-auto miral::BasicWindowManager::for_each_window_in_info(
-    WindowInfo const& info,
-    std::function<void(const Window&)> func
-) -> void
+void miral::BasicWindowManager::for_each_descendent_in(WindowInfo const& info, std::function<void(const Window&)> func)
 {
-    std::function<void(WindowInfo const& info)> const iterate_children =
+    std::function<void(WindowInfo const& info)> const iterate_descendents =
         [&](WindowInfo const& info)
         {
             for (auto const& child : info.children())
             {
-                func(child);
+                for_each_descendent_in(info_for(child), func);
             }
         };
 
     func(info.window());
-    iterate_children(info);
+    iterate_descendents(info);
 }
 
 auto miral::BasicWindowManager::collect_windows(const miral::WindowInfo &info) -> SurfaceSet
 {
     SurfaceSet windows;
 
-    for_each_window_in_info(info, [&](Window const& window)
+    for_each_descendent_in(info, [&](Window const& window)
     {
         windows.insert(window);
     });
@@ -976,7 +977,7 @@ void miral::BasicWindowManager::raise_tree(Window const& root)
         raise_tree(parent);
 
     std::vector<Window> raised_windows;
-    for_each_window_in_info(info, [&](Window const& window)
+    for_each_descendent_in(info, [&](Window const& window)
     {
         raised_windows.push_back(window);
     });
