@@ -16,3 +16,4 @@ benchmarks/build
 tools/bot-data.tar.xz
 .clangd
 compile_commands.json
+.direnv

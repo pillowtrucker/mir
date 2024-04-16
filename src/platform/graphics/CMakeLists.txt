@@ -49,13 +49,15 @@ if (DRM_VERSION VERSION_GREATER 2.4.107)
       PkgConfig::DRM)
 endif()
 
+find_path(LIBDRM_INCLUDE_DIR NAMES "drm_fourcc.h" PATH_SUFFIXES "libdrm" "")
+
 add_custom_command(
   OUTPUT
     drm-formats
   VERBATIM
   COMMAND
     "sh" "-c"
-      "grep \"#define DRM_FORMAT\" /usr/include/libdrm/drm_fourcc.h | \
+      "grep \"#define DRM_FORMAT\" ${LIBDRM_INCLUDE_DIR}/drm_fourcc.h | \
        grep -v DRM_FORMAT_BIG_ENDIAN |                             \
        grep -v MOD |                                               \
        grep -v DRM_FORMAT_RESERVED |                               \
@@ -64,13 +66,14 @@ add_custom_command(
        sed \"s/\\(.*\\)/STRINGIFY(\\1)/\" >                        \
        ${DRM_FORMATS_FILE}"
 )
+
 add_custom_command(
   OUTPUT
     drm-formats-big-endian
   VERBATIM
   COMMAND
     "sh" "-c"
-      "grep \"#define DRM_FORMAT\" /usr/include/libdrm/drm_fourcc.h | \
+      "grep \"#define DRM_FORMAT\" ${LIBDRM_INCLUDE_DIR}/drm_fourcc.h | \
        grep -v DRM_FORMAT_BIG_ENDIAN |                             \
        grep -v MOD |                                               \
        grep -v DRM_FORMAT_RESERVED |                               \
