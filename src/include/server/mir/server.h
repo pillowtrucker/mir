@@ -41,11 +41,6 @@ namespace frontend
 {
 class SessionAuthorizer;
 }
-namespace cookie
-{
-using Secret = std::vector<uint8_t>;
-class Authority;
-}
 namespace shell
 {
 class DisplayLayout;
@@ -66,6 +61,7 @@ class SessionListener;
 class SessionCoordinator;
 class SurfaceFactory;
 class Session;
+class SessionLock;
 }
 namespace input
 {
@@ -82,7 +78,8 @@ enum class OptionType
     integer,
     string,
     boolean,
-    strings
+    strings,
+    real
 };
 
 /// Customise and run a Mir server.
@@ -258,11 +255,6 @@ public:
     /// Sets an override functor for creating the gl config.
     void override_the_gl_config(Builder<graphics::GLConfig> const& gl_config_builder);
 
-    /// Sets an override functor for creating the cookie authority.
-    /// A secret can be saved and any process this secret is shared
-    /// with can verify Mir-generated cookies, or produce their own.
-    void override_the_cookie_authority(Builder<cookie::Authority> const& cookie_authority_builder);
-
     /// Sets an override functor for creating the input dispatcher.
     void override_the_input_dispatcher(Builder<input::InputDispatcher> const& input_dispatcher_builder);
 
@@ -426,6 +418,8 @@ public:
     auto the_seat_observer_registrar() const ->
         std::shared_ptr<ObserverRegistrar<input::SeatObserver>>;
 
+    auto the_session_lock() const ->
+        std::shared_ptr<scene::SessionLock>;
 
 /** @} */
 

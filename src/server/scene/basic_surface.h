@@ -17,6 +17,7 @@
 #ifndef MIR_SCENE_BASIC_SURFACE_H_
 #define MIR_SCENE_BASIC_SURFACE_H_
 
+#include "mir/graphics/display_configuration.h"
 #include "mir/scene/surface.h"
 #include "mir/proof_of_mutex_lock.h"
 #include "mir/wayland/weak.h"
@@ -30,6 +31,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <set>
 
 namespace mir
 {
@@ -41,6 +43,7 @@ namespace frontend { class EventSink; }
 namespace graphics
 {
 class Buffer;
+class DisplayConfigurationObserver;
 }
 namespace input
 {
@@ -62,7 +65,8 @@ public:
         MirPointerConfinementState state,
         std::list<scene::StreamInfo> const& streams,
         std::shared_ptr<graphics::CursorImage> const& cursor_image,
-        std::shared_ptr<SceneReport> const& report);
+        std::shared_ptr<SceneReport> const& report,
+        std::shared_ptr<ObserverRegistrar<graphics::DisplayConfigurationObserver>> const& display_config_registrar);
 
     BasicSurface(
         std::shared_ptr<Session> const& session,
@@ -73,12 +77,14 @@ public:
         MirPointerConfinementState state,
         std::list<scene::StreamInfo> const& streams,
         std::shared_ptr<graphics::CursorImage> const& cursor_image,
-        std::shared_ptr<SceneReport> const& report);
+        std::shared_ptr<SceneReport> const& report,
+        std::shared_ptr<ObserverRegistrar<graphics::DisplayConfigurationObserver>> const& display_config_registrar);
 
     ~BasicSurface() noexcept;
 
     void register_interest(std::weak_ptr<SurfaceObserver> const& observer) override;
     void register_interest(std::weak_ptr<SurfaceObserver> const& observer, Executor& executor) override;
+    void register_early_observer(std::weak_ptr<SurfaceObserver> const& observer, Executor& executor) override;
     void unregister_interest(SurfaceObserver const& observer) override;
 
     std::string name() const override;
@@ -112,7 +118,6 @@ public:
     bool visible() const override;
 
     graphics::RenderableList generate_renderables(compositor::CompositorID id) const override;
-    int buffers_ready_for_compositor(void const* compositor_id) const override;
 
     MirWindowType type() const override;
     MirWindowState state() const override;
@@ -171,6 +176,7 @@ public:
 
 private:
     struct State;
+    class DisplayConfigurationEarlyListener;
     class Multiplexer;
 
     bool visible(State const& state) const;
@@ -178,12 +184,13 @@ private:
     MirWindowState set_state(MirWindowState s);
     int set_dpi(int);
     MirWindowVisibility set_visibility(MirWindowVisibility v);
-    int set_swap_interval(int);
     MirOrientationMode set_preferred_orientation(MirOrientationMode mode);
     void clear_frame_posted_callbacks(State& state);
     void update_frame_posted_callbacks(State& state);
     auto content_size(State const& state) const -> geometry::Size;
     auto content_top_left(State const& state) const -> geometry::Point;
+    void track_outputs();
+    void linearised_track_outputs();
 
     struct State
     {
@@ -229,6 +236,10 @@ private:
     std::shared_ptr<SceneReport> const report;
     std::weak_ptr<Surface> const parent_;
     wayland::Weak<frontend::WlSurface> const wayland_surface_;
+    std::shared_ptr<ObserverRegistrar<graphics::DisplayConfigurationObserver>> display_config_registrar;
+    std::shared_ptr<DisplayConfigurationEarlyListener> const display_config_monitor;
+    std::shared_ptr<graphics::DisplayConfiguration const> display_config;
+    std::set<graphics::DisplayConfigurationOutputId> tracked_outputs;
 };
 
 }

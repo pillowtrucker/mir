@@ -47,23 +47,9 @@ public:
         return geometry::Size();
     }
 
-    void allow_framedropping(bool) override
-    {
-    }
-    bool framedropping() const override
-    {
-        return false;
-    }
-    int buffers_ready_for_compositor(void const*) const override { return nready; }
-
-    void drop_old_buffers() override {}
     void submit_buffer(std::shared_ptr<graphics::Buffer> const& b) override
     {
         if (b) ++nready;
-    }
-    void with_most_recent_buffer_do(std::function<void(graphics::Buffer&)> const& fn) override
-    {
-        fn(*stub_compositor_buffer);
     }
     MirPixelFormat pixel_format() const override { return mir_pixel_format_abgr_8888; }
     void set_frame_posted_callback(std::function<void(geometry::Size const&)> const&) override {}

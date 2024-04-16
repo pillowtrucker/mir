@@ -19,19 +19,18 @@
 
 #include "mir/compositor/buffer_stream.h"
 #include "mir/geometry/size.h"
+#include "mir/synchronised.h"
 #include "multi_monitor_arbiter.h"
 
 #include <atomic>
 #include <mutex>
 #include <memory>
-#include <set>
 #include <atomic>
 
 namespace mir
 {
 namespace compositor
 {
-class Schedule;
 class Stream : public BufferStream
 {
 public:
@@ -39,35 +38,29 @@ public:
     ~Stream();
 
     void submit_buffer(std::shared_ptr<graphics::Buffer> const& buffer) override;
-    void with_most_recent_buffer_do(std::function<void(graphics::Buffer&)> const& exec) override;
     MirPixelFormat pixel_format() const override;
     void set_frame_posted_callback(
         std::function<void(geometry::Size const&)> const& callback) override;
     std::shared_ptr<graphics::Buffer>
         lock_compositor_buffer(void const* user_id) override;
     geometry::Size stream_size() override;
-    void allow_framedropping(bool) override;
-    bool framedropping() const override;
-    int buffers_ready_for_compositor(void const* user_id) const override;
-    void drop_old_buffers() override;
     bool has_submitted_buffer() const override;
     void set_scale(float scale) override;
 
 private:
-    enum class ScheduleMode;
-    void transition_schedule(std::shared_ptr<Schedule>&& new_schedule, std::lock_guard<std::mutex> const&);
-
-    std::mutex mutable mutex;
-    ScheduleMode schedule_mode;
-    std::shared_ptr<Schedule> schedule;
     std::shared_ptr<MultiMonitorArbiter> const arbiter;
-    geometry::Size latest_buffer_size;
-    float scale_{1.0f};
-    MirPixelFormat pf;
+    struct State
+    {
+        geometry::Size latest_buffer_size;
+        float scale_{1.0f};
+        MirPixelFormat pf;
+    };
+    Synchronised<State> latest_state;
+
     std::atomic<bool> first_frame_posted;
 
-    std::mutex callback_mutex;
-    std::function<void(geometry::Size const&)> frame_callback;
+
+    Synchronised<std::function<void(geometry::Size const&)>> frame_callback;
 };
 }
 }

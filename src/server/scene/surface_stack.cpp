@@ -23,6 +23,7 @@
 #include "mir/graphics/renderable.h"
 #include "mir/depth_layer.h"
 #include "mir/executor.h"
+#include "mir/log.h"
 
 #include <boost/throw_exception.hpp>
 
@@ -128,11 +129,11 @@ private:
 
 }
 
-ms::SurfaceStack::SurfaceStack(
-    std::shared_ptr<SceneReport> const& report) :
+ms::SurfaceStack::SurfaceStack(std::shared_ptr<SceneReport> const& report) :
     report{report},
     scene_changed{false},
-    surface_observer{std::make_shared<SurfaceDepthLayerObserver>(this)}
+    surface_observer{std::make_shared<SurfaceDepthLayerObserver>(this)},
+    multiplexer(linearising_executor)
 {
 }
 
@@ -179,33 +180,6 @@ mc::SceneElementSequence ms::SurfaceStack::scene_elements_for(mc::CompositorID i
     return elements;
 }
 
-int ms::SurfaceStack::frames_pending(mc::CompositorID id) const
-{
-    RecursiveReadLock lg(guard);
-
-    int result = scene_changed ? 1 : 0;
-    for (auto const& layer : surface_layers)
-    {
-        for (auto const& surface : layer)
-        {
-            if (surface_can_be_shown(surface) && surface->visible())
-            {
-                auto const tracker = rendering_trackers.find(surface.get());
-                if (tracker != rendering_trackers.end() && tracker->second->is_exposed_in(id))
-                {
-                    // Note that we ask the surface and not a Renderable.
-                    // This is because we don't want to waste time and resources
-                    // on a snapshot till we're sure we need it...
-                    int ready = surface->buffers_ready_for_compositor(id);
-                    if (ready > result)
-                        result = ready;
-                }
-            }
-        }
-    }
-    return result;
-}
-
 void ms::SurfaceStack::register_compositor(mc::CompositorID cid)
 {
     RecursiveWriteLock lg(guard);
@@ -247,7 +221,7 @@ void ms::SurfaceStack::remove_input_visualization(
         }
         overlays.erase(p);
     }
-    
+
     emit_scene_changed();
 }
 
@@ -552,7 +526,7 @@ void ms::SurfaceStack::insert_surface_at_top_of_depth_layer(std::shared_ptr<Surf
 
 auto ms::SurfaceStack::surface_can_be_shown(std::shared_ptr<Surface> const& surface) const -> bool
 {
-    return screen_lock_handle.expired() || surface->visible_on_lock_screen();
+    return !is_locked || surface->visible_on_lock_screen();
 }
 
 void ms::SurfaceStack::add_observer(std::shared_ptr<ms::Observer> const& observer)
@@ -575,9 +549,9 @@ void ms::SurfaceStack::remove_observer(std::weak_ptr<ms::Observer> const& observ
     auto o = observer.lock();
     if (!o)
         BOOST_THROW_EXCEPTION(std::logic_error("Invalid observer (destroyed)"));
-    
+
     o->end_observation();
-    
+
     observers.remove(o);
 }
 
@@ -599,78 +573,63 @@ auto ms::SurfaceStack::stacking_order_of(SurfaceSet const& surfaces) const -> Su
     return result;
 }
 
-struct ms::SurfaceStack::SharedScreenLock
-{
-    SharedScreenLock(std::weak_ptr<ms::SurfaceStack> surface_stack) : surface_stack{std::move(surface_stack)}
-    {
-    }
-
-    ~SharedScreenLock()
-    {
-        if (auto const shared = surface_stack.lock())
-        {
-            // shared->screen_is_locked() should already be false
-            shared->emit_scene_changed();
-        }
-    }
-
-private:
-    std::weak_ptr<ms::SurfaceStack> surface_stack;
-};
-
-struct ms::SurfaceStack::BasicScreenLockHandle : mf::ScreenLockHandle
-{
-    BasicScreenLockHandle(std::shared_ptr<SharedScreenLock> lock)
-        : lock{new std::shared_ptr<SharedScreenLock>{std::move(lock)}}
-    {
-    }
-
-    ~BasicScreenLockHandle()
-    {
-        if (allowed_to_be_dropped)
-        {
-            delete lock;
-        }
-        else
-        {
-            fatal_error("The screen was not properly unlocked");
-        }
-    }
-
-    void allow_to_be_dropped() override
-    {
-        allowed_to_be_dropped = true;
-    }
-
-private:
-    std::shared_ptr<SharedScreenLock> const* const lock;
-    bool allowed_to_be_dropped{false};
-};
-
-auto ms::SurfaceStack::lock_screen() -> std::unique_ptr<mf::ScreenLockHandle>
-{
-    std::shared_ptr<SharedScreenLock> shared;
-    bool is_new{false};
-    {
-        RecursiveWriteLock lk(guard);
-        shared = screen_lock_handle.lock();
-        if (!shared)
-        {
-            screen_lock_handle = shared = std::make_shared<SharedScreenLock>(shared_from_this());
-            is_new = true;
-        }
-    }
-    if (is_new)
-    {
-        emit_scene_changed();
-    }
-    return std::make_unique<BasicScreenLockHandle>(shared);
-}
-
 auto ms::SurfaceStack::screen_is_locked() const -> bool
 {
-    RecursiveReadLock lk(guard);
-    return !screen_lock_handle.expired();
+    return is_locked;
+}
+
+void ms::SurfaceStack::lock()
+{
+    bool temp = false;
+    if (is_locked.compare_exchange_strong(temp, true))
+    {
+        mir::log_info("Session is now locked and listeners are being notified");
+        emit_scene_changed();
+        multiplexer.on_lock();
+    }
+    else
+    {
+        mir::log_debug("Session received duplicate lock request");
+    }
+}
+
+void ms::SurfaceStack::unlock()
+{
+    bool temp = true;
+    if (is_locked.compare_exchange_strong(temp, false))
+    {
+        mir::log_info("Session is now unlocked and listeners are being notified");
+        emit_scene_changed();
+        multiplexer.on_unlock();
+    }
+    else
+    {
+        mir::log_debug("Session received duplicate unlock request");
+    }
+}
+
+void ms::SurfaceStack::register_interest(std::weak_ptr<SessionLockObserver> const& observer)
+{
+    multiplexer.register_interest(observer);
+}
+
+void ms::SurfaceStack::register_interest(
+    std::weak_ptr<SessionLockObserver> const& observer,
+    mir::Executor& other_executor)
+{
+    multiplexer.register_interest(observer, other_executor);
+}
+
+void ms::SurfaceStack::register_early_observer(
+    std::weak_ptr<SessionLockObserver> const& observer,
+    mir::Executor& other_executor)
+{
+    multiplexer.register_early_observer(observer, other_executor);
+}
+
+void ms::SurfaceStack::unregister_interest(SessionLockObserver const& observer)
+{
+    multiplexer.unregister_interest(observer);
 }
 
 void ms::Observers::surface_added(std::shared_ptr<Surface> const& surface)
@@ -707,4 +666,19 @@ void ms::Observers::end_observation()
 {
     for_each([&](std::shared_ptr<Observer> const& observer)
         { observer->end_observation(); });
+}
+
+ms::SessionLockObserverMultiplexer::SessionLockObserverMultiplexer(Executor& executor)
+    : ObserverMultiplexer<SessionLockObserver>(executor)
+{
+}
+
+void ms::SessionLockObserverMultiplexer::on_lock()
+{
+    for_each_observer(&SessionLockObserver::on_lock);
+}
+
+void ms::SessionLockObserverMultiplexer::on_unlock()
+{
+    for_each_observer(&SessionLockObserver::on_unlock);
 }

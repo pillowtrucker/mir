@@ -1,10 +1,4 @@
-MIRAL_4.0 {
-# WaylandExtensions::Context ctor and dtor symbols are inline
-# but can be exported by unoptimized builds.
-# This makes the "regenerate" script hide them:
-#    miral::WaylandExtensions::Context::?Context*;
-#    miral::WaylandExtensions::Context::Context*;
-#    vtable?for?miral::WaylandExtensions::Context;
+MIRAL_5.0 {
 global:
   extern "C++" {
     miral::AddInitCallback::?AddInitCallback*;
@@ -88,6 +82,8 @@ global:
     miral::MinimalWindowManager::handle_touch_event*;
     miral::MinimalWindowManager::handle_window_ready*;
     miral::MinimalWindowManager::place_new_window*;
+    miral::MinimalWindowManager::advise_new_window*;
+    miral::MinimalWindowManager::advise_delete_window*;
     miral::MirRunner::?MirRunner*;
     miral::MirRunner::MirRunner*;
     miral::MirRunner::add_start_callback*;
@@ -125,6 +121,9 @@ global:
     miral::PrependEventFilter::PrependEventFilter*;
     miral::PrependEventFilter::operator*;
     miral::PrintTo*;
+    miral::SessionLockListener::?SessionLockListener*;
+    miral::SessionLockListener::SessionLockListener*;
+    miral::SessionLockListener::operator*;
     miral::SetCommandLineHandler::?SetCommandLineHandler*;
     miral::SetCommandLineHandler::SetCommandLineHandler*;
     miral::SetCommandLineHandler::operator*;
@@ -138,6 +137,8 @@ global:
     miral::StartupInternalClient::StartupInternalClient*;
     miral::StartupInternalClient::operator*;
     miral::WaylandExtensions::?WaylandExtensions*;
+    miral::WaylandExtensions::Context::?Context*;
+    miral::WaylandExtensions::Context::Context*;
     miral::WaylandExtensions::Context::operator*;
     miral::WaylandExtensions::EnableInfo::app*;
     miral::WaylandExtensions::EnableInfo::name*;
@@ -158,6 +159,8 @@ global:
     miral::WaylandExtensions::zwlr_screencopy_manager_v1*;
     miral::WaylandExtensions::zwlr_virtual_pointer_manager_v1*;
     miral::WaylandExtensions::zwp_input_method_manager_v2*;
+    miral::WaylandExtensions::zwp_input_method_v1*;
+    miral::WaylandExtensions::zwp_input_panel_v1*;
     miral::WaylandExtensions::zwp_virtual_keyboard_manager_v1*;
     miral::WaylandExtensions::zxdg_output_manager_v1*;
     miral::Window::?Window*;
@@ -180,6 +183,7 @@ global:
     miral::WindowInfo::constrain_resize*;
     miral::WindowInfo::depth_layer*;
     miral::WindowInfo::exclusive_rect*;
+    miral::WindowInfo::ignore_exclusion_zones*;
     miral::WindowInfo::focus_mode*;
     miral::WindowInfo::has_output_id*;
     miral::WindowInfo::height_inc*;
@@ -265,6 +269,7 @@ global:
     miral::WindowManagerTools::swap_tree_order*;
     miral::WindowManagerTools::window_at*;
     miral::WindowManagerTools::window_to_select_application*;
+    miral::WindowManagerTools::can_select_window*;
     miral::WindowSpecification::?WindowSpecification*;
     miral::WindowSpecification::WindowSpecification*;
     miral::WindowSpecification::application_id*;
@@ -275,6 +280,7 @@ global:
     miral::WindowSpecification::confine_pointer*;
     miral::WindowSpecification::depth_layer*;
     miral::WindowSpecification::exclusive_rect*;
+    miral::WindowSpecification::ignore_exclusion_zones*;
     miral::WindowSpecification::focus_mode*;
     miral::WindowSpecification::height_inc*;
     miral::WindowSpecification::input_mode*;
@@ -303,6 +309,7 @@ global:
     miral::WindowSpecification::window_placement_gravity*;
     miral::X11Support::?X11Support*;
     miral::X11Support::X11Support*;
+    miral::X11Support::default_to_enabled*;
     miral::X11Support::operator*;
     miral::Zone::?Zone*;
     miral::Zone::Zone*;
@@ -328,7 +335,6 @@ global:
     miral::toolkit::mir_input_event_get_pointer_event*;
     miral::toolkit::mir_input_event_get_touch_event*;
     miral::toolkit::mir_input_event_get_type*;
-    miral::toolkit::mir_input_event_has_cookie*;
     miral::toolkit::mir_keyboard_event_action*;
     miral::toolkit::mir_keyboard_event_input_event*;
     miral::toolkit::mir_keyboard_event_key_text*;
@@ -373,6 +379,8 @@ global:
     non-virtual?thunk?to?miral::MinimalWindowManager::handle_touch_event*;
     non-virtual?thunk?to?miral::MinimalWindowManager::handle_window_ready*;
     non-virtual?thunk?to?miral::MinimalWindowManager::place_new_window*;
+    non-virtual?thunk?to?miral::MinimalWindowManager::advise_new_window*;
+    non-virtual?thunk?to?miral::MinimalWindowManager::advise_delete_window*;
     non-virtual?thunk?to?miral::WaylandExtensions::Context::?Context*;
     non-virtual?thunk?to?miral::WindowManagementPolicy::?WindowManagementPolicy*;
     non-virtual?thunk?to?miral::WindowManagementPolicy::advise_adding_to_workspace*;
@@ -414,6 +422,7 @@ global:
     typeinfo?for?miral::Output;
     typeinfo?for?miral::Output::PhysicalSizeMM;
     typeinfo?for?miral::PrependEventFilter;
+    typeinfo?for?miral::SessionLockListener;
     typeinfo?for?miral::SetCommandLineHandler;
     typeinfo?for?miral::SetTerminator;
     typeinfo?for?miral::SetWindowManagementPolicy;
@@ -451,12 +460,14 @@ global:
     vtable?for?miral::Output;
     vtable?for?miral::Output::PhysicalSizeMM;
     vtable?for?miral::PrependEventFilter;
+    vtable?for?miral::SessionLockListener;
     vtable?for?miral::SetCommandLineHandler;
     vtable?for?miral::SetTerminator;
     vtable?for?miral::SetWindowManagementPolicy;
     vtable?for?miral::StartupInternalClient;
     vtable?for?miral::WaylandExtensions;
     vtable?for?miral::WaylandExtensions::Builder;
+    vtable?for?miral::WaylandExtensions::Context;
     vtable?for?miral::WaylandExtensions::EnableInfo;
     vtable?for?miral::Window;
     vtable?for?miral::WindowInfo;
@@ -469,17 +480,5 @@ global:
     vtable?for?miral::X11Support;
     vtable?for?miral::Zone;
   };
-
-  local: *;
+local: *;
 };
-
-MIRAL_4.1 {
-global:
-  extern "C++" {
-    miral::WaylandExtensions::zwp_input_method_v1*;
-    miral::WaylandExtensions::zwp_input_panel_v1*;
-    miral::X11Support::default_to_enabled*;
-  };
-
-} MIRAL_4.0;
-

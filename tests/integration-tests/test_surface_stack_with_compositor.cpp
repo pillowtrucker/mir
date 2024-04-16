@@ -24,6 +24,7 @@
 #include "src/server/compositor/multi_threaded_compositor.h"
 #include "src/server/compositor/stream.h"
 #include "mir/test/fake_shared.h"
+#include "mir/test/doubles/fake_display_configuration_observer_registrar.h"
 #include "mir/test/doubles/mock_buffer_stream.h"
 #include "mir/test/doubles/null_display.h"
 #include "mir/test/doubles/stub_renderer.h"
@@ -37,6 +38,7 @@
 #include "mir/test/doubles/stub_gl_rendering_provider.h"
 #include "mir/test/doubles/null_gl_config.h"
 #include "mir/test/doubles/stub_buffer_allocator.h"
+#include "mir/test/doubles/stub_main_loop.h"
 
 #include <condition_variable>
 #include <mutex>
@@ -85,7 +87,7 @@ struct CountingDisplaySyncGroup : public mtd::StubDisplaySyncGroup
         std::unique_lock lk(mutex);
         return count_cv.wait_until(lk, timeout,
         [this, &count](){
-            return post_count_ >= count;  
+            return post_count_ >= count;
         });
     }
 
@@ -110,7 +112,7 @@ struct StubDisplay : public mtd::NullDisplay
       : primary(primary),
         secondary(secondary)
     {
-    } 
+    }
     void for_each_display_sync_group(std::function<void(mg::DisplaySyncGroup&)> const& fn) override
     {
         fn(primary);
@@ -155,6 +157,7 @@ struct SurfaceStackCompositor : public Test
         stream(std::make_shared<mc::Stream>(geom::Size{ 1, 1 }, mir_pixel_format_abgr_8888 )),
         mock_buffer_stream(std::make_shared<NiceMock<mtd::MockBufferStream>>()),
         streams({ { stream, {0,0}, {} } }),
+        display_config_registrar{std::make_shared<mtd::FakeDisplayConfigurationObserverRegistrar>()},
         stub_surface{std::make_shared<ms::BasicSurface>(
             nullptr /* session */,
             mw::Weak<mf::WlSurface>{},
@@ -163,8 +166,9 @@ struct SurfaceStackCompositor : public Test
             mir_pointer_unconfined,
             streams,
             std::shared_ptr<mg::CursorImage>(),
-            null_scene_report)},
-        stub_buffer(std::make_shared<mtd::StubBuffer>()),
+            null_scene_report,
+            display_config_registrar)},
+        stub_buffer(std::make_shared<mtd::StubBuffer>(geom::Size{100, 100})),
         other_stream(std::make_shared<mc::Stream>(geom::Size{ 1, 1 }, mir_pixel_format_abgr_8888 )),
         other_streams({ { other_stream, {0,0}, {} } }),
         other_stub_surface{std::make_shared<ms::BasicSurface>(
@@ -175,7 +179,8 @@ struct SurfaceStackCompositor : public Test
             mir_pointer_unconfined,
             other_streams,
             std::shared_ptr<mg::CursorImage>(),
-            null_scene_report)},
+            null_scene_report,
+            display_config_registrar)},
         other_stub_buffer(std::make_shared<mtd::StubBuffer>())
     {
         ON_CALL(*mock_buffer_stream, lock_compositor_buffer(_))
@@ -189,6 +194,7 @@ struct SurfaceStackCompositor : public Test
     std::shared_ptr<mc::Stream> stream;
     std::shared_ptr<mtd::MockBufferStream> mock_buffer_stream;
     std::list<ms::StreamInfo> const streams;
+    std::shared_ptr<mtd::FakeDisplayConfigurationObserverRegistrar> display_config_registrar;
     std::shared_ptr<ms::BasicSurface> stub_surface;
     std::shared_ptr<mg::Buffer> stub_buffer;
     std::shared_ptr<mc::Stream> other_stream;
@@ -274,63 +280,6 @@ TEST_F(SurfaceStackCompositor, swapping_a_surface_that_has_been_added_triggers_a
     EXPECT_TRUE(stub_secondary_db.has_posted_at_least(1, timeout));
 }
 
-//test associated with lp:1290306, 1293896, 1294048, 1294051, 1294053
-TEST_F(SurfaceStackCompositor, compositor_runs_until_all_surfaces_buffers_are_consumed)
-{
-    std::function<void(mir::geometry::Size const&)> frame_callback;
-    ON_CALL(*mock_buffer_stream, buffers_ready_for_compositor(_))
-        .WillByDefault(Return(5));
-    EXPECT_CALL(*mock_buffer_stream, set_frame_posted_callback(_))
-        .WillOnce(SaveArg<0>(&frame_callback))
-        .WillRepeatedly(Return());
-    stub_surface->set_streams(std::list<ms::StreamInfo>{ { mock_buffer_stream, {0,0}, geom::Size{100, 100} } });
-
-    mc::MultiThreadedCompositor mt_compositor(
-        mt::fake_shared(stub_display),
-        mt::fake_shared(stack),
-        mt::fake_shared(dbc_factory),
-        mt::fake_shared(stub_display_listener),
-        null_comp_report, default_delay, false);
-    mt_compositor.start();
-
-    stack.add_surface(stub_surface, mi::InputReceptionMode::normal);
-    ASSERT_THAT(frame_callback, Ne(nullptr));
-    frame_callback({ 100, 100 });
-
-    EXPECT_TRUE(stub_primary_db.has_posted_at_least(5, timeout));
-    EXPECT_TRUE(stub_secondary_db.has_posted_at_least(5, timeout));
-}
-
-TEST_F(SurfaceStackCompositor, bypassed_compositor_runs_until_all_surfaces_buffers_are_consumed)
-{
-    std::function<void(mir::geometry::Size const&)> frame_callback;
-    ON_CALL(*mock_buffer_stream, buffers_ready_for_compositor(_))
-        .WillByDefault(Return(5));
-    ON_CALL(*mock_buffer_stream, lock_compositor_buffer(_))
-        .WillByDefault(Return(mt::fake_shared(*stub_buffer)));
-    EXPECT_CALL(*mock_buffer_stream, set_frame_posted_callback(_))
-        .WillOnce(SaveArg<0>(&frame_callback))
-        .WillRepeatedly(Return());
-    stub_surface->set_streams(std::list<ms::StreamInfo>{ { mock_buffer_stream, {0,0}, geom::Size{100, 100} } });
-
-    stub_surface->resize(geom::Size{10,10});
-    stub_surface->move_to(geom::Point{0,0});
-    mc::MultiThreadedCompositor mt_compositor(
-        mt::fake_shared(stub_display),
-        mt::fake_shared(stack),
-        mt::fake_shared(dbc_factory),
-        mt::fake_shared(stub_display_listener),
-        null_comp_report, default_delay, false);
-    mt_compositor.start();
-
-    stack.add_surface(stub_surface, mi::InputReceptionMode::normal);
-    ASSERT_THAT(frame_callback, Ne(nullptr));
-    frame_callback({ 100, 100 });
-
-    EXPECT_TRUE(stub_primary_db.has_posted_at_least(5, timeout));
-    EXPECT_TRUE(stub_secondary_db.has_posted_at_least(5, timeout));
-}
-
 TEST_F(SurfaceStackCompositor, an_empty_scene_retriggers)
 {
     mc::MultiThreadedCompositor mt_compositor(
@@ -348,7 +297,7 @@ TEST_F(SurfaceStackCompositor, an_empty_scene_retriggers)
     EXPECT_TRUE(stub_secondary_db.has_posted_at_least(1, timeout));
 
     stack.remove_surface(stub_surface);
-    
+
     EXPECT_TRUE(stub_primary_db.has_posted_at_least(2, timeout));
     EXPECT_TRUE(stub_secondary_db.has_posted_at_least(2, timeout));
 }

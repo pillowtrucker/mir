@@ -455,7 +455,6 @@ int miral::BasicWindowManager::set_surface_attribute(
         // But, as the legacy API exists, we treat it as a query
         return surface->query(mir_window_attrib_focus);
 
-    case mir_window_attrib_swapinterval:
     case mir_window_attrib_dpi:
     default:
         return surface->configure(attrib, value);
@@ -898,22 +897,7 @@ auto miral::BasicWindowManager::window_to_select_application(const Application a
         if (window.application() != application)
              return true;
 
-        // Check if the previous window has to remain focused
-        auto const prev_windows_focus_mode = prev_window ? info_for(prev_window).focus_mode() : mir_focus_mode_focusable;
-        if (prev_windows_focus_mode == mir_focus_mode_grabbing)
-        {
-            return true;
-        }
-
-        // Check if the new window selection has selection disabled
-        auto& desired_window_selection = info_for(window);
-        if (desired_window_selection.focus_mode() == mir_focus_mode_disabled)
-        {
-            return true;
-        }
-
-        // Check if we can activate it at all.
-        if (desired_window_selection.can_be_active() && desired_window_selection.state() != mir_window_state_hidden)
+        if (can_select_window(window))
         {
             result = window;
             return false;
@@ -923,6 +907,25 @@ auto miral::BasicWindowManager::window_to_select_application(const Application a
     });
 
     return result;
+}
+
+auto miral::BasicWindowManager::can_select_window(miral::Window const& window) const -> bool
+{
+    auto const current_window = active_window();
+    auto const current_windows_focus_mode = current_window ? info_for(current_window).focus_mode() : mir_focus_mode_focusable;
+    if (current_windows_focus_mode == mir_focus_mode_grabbing)
+        return false;
+
+    // Check if the new window selection has selection disabled
+    auto& desired_window_selection = info_for(window);
+    if (desired_window_selection.focus_mode() == mir_focus_mode_disabled)
+        return false;
+
+    // Check if we can activate it at all.
+    if (desired_window_selection.can_be_active() && desired_window_selection.state() != mir_window_state_hidden)
+        return true;
+
+    return false;
 }
 
 auto miral::BasicWindowManager::window_at(geometry::Point cursor) const
@@ -2016,6 +2019,42 @@ auto miral::BasicWindowManager::place_new_surface(WindowSpecification parameters
 
         if (parameters.top_left().value().y < display_area.top_left.y)
             parameters.top_left() = Point{parameters.top_left().value().x, display_area.top_left.y};
+
+        if (parameters.state() == mir_window_state_restored)
+        {
+            auto const offset{48};
+            std::array const positions {
+                parameters.top_left().value(),
+                parameters.top_left().value() + Displacement( offset,  offset),
+                parameters.top_left().value() + Displacement(-offset,  offset),
+                parameters.top_left().value() + Displacement( offset, -offset),
+                parameters.top_left().value() + Displacement(-offset, -offset)};
+
+            for (auto const& position : positions)
+            {
+                auto const window{window_at(position)};
+
+                static auto const ignored_state_or_type = [](WindowInfo const& info)
+                    {
+                        switch (info.type())
+                        {
+                        case mir_window_type_normal:
+                        case mir_window_type_decoration:
+                        case mir_window_type_freestyle:
+                            return info.state() != mir_window_state_restored;
+
+                        default:
+                            return true;
+                        }
+                    };
+
+                if (!window || ignored_state_or_type(info_for(window)) || window.top_left() != position)
+                {
+                    parameters.top_left().value() = position;
+                    break;
+                }
+            }
+        }
     }
 
     return parameters;
@@ -2844,14 +2883,19 @@ void miral::BasicWindowManager::update_application_zones_and_attached_windows()
         }
     }
 
-    for (auto& area : display_areas)
+    for (auto const& area : display_areas)
     {
         Rectangle zone_rect = area->area;
 
-        /// The first pass will modify the application zone as it goes
-        /// The second pass will use the final application zone
-        std::vector<WindowInfo*> first_pass;
-        std::vector<WindowInfo*> second_pass;
+        // The placement order is as follows:
+        //  1. First, attached windows that ignore exclusion zones
+        //  2. Next, windows spanning the screen horizontally
+        //  3. Then, windows spanning the screen vertically
+        //  4. Finally, other maximized windows since they respect all exclusion zones
+        std::vector<WindowInfo*> attached_windows_that_ignore_exclusion_zones;
+        std::vector<WindowInfo*> full_width_attached_windows;
+        std::vector<WindowInfo*> other_attached_windows;
+        std::vector<WindowInfo*> maximized_windows;
 
         for (auto const& window : area->attached_windows)
         {
@@ -2862,16 +2906,26 @@ void miral::BasicWindowManager::update_application_zones_and_attached_windows()
                 switch (info.state())
                 {
                 case mir_window_state_attached:
-                    if (info.exclusive_rect().is_set())
+                    if (info.ignore_exclusion_zones())
                     {
-                        first_pass.push_back(&info);
+                        attached_windows_that_ignore_exclusion_zones.push_back(&info);
+                        break;
+                    }
+                    else if (info.exclusive_rect().is_set())
+                    {
+                        MirPlacementGravity  edges = info.attached_edges();
+                        bool is_full_width = (edges & mir_placement_gravity_east) && (edges & mir_placement_gravity_west);
+                        if (is_full_width)
+                            full_width_attached_windows.push_back(&info);
+                        else
+                            other_attached_windows.push_back(&info);
                         break;
                     }
                     // fallthrough
                 case mir_window_state_maximized:
                 case mir_window_state_horizmaximized:
                 case mir_window_state_vertmaximized:
-                    second_pass.push_back(&info);
+                    maximized_windows.push_back(&info);
                     break;
 
                 default:
@@ -2881,7 +2935,12 @@ void miral::BasicWindowManager::update_application_zones_and_attached_windows()
             }
         }
 
-        for (auto info_ptr : first_pass)
+        for (auto info_ptr : attached_windows_that_ignore_exclusion_zones)
+        {
+            place_attached_to_zone(*info_ptr, zone_rect);
+        }
+
+        for (auto info_ptr : full_width_attached_windows)
         {
             place_attached_to_zone(*info_ptr, zone_rect);
 
@@ -2893,7 +2952,19 @@ void miral::BasicWindowManager::update_application_zones_and_attached_windows()
             zone_rect = apply_exclusive_rect_to_application_zone(zone_rect, exclusive_rect, info.attached_edges());
         }
 
-        for (auto info_ptr : second_pass)
+        for (auto info_ptr : other_attached_windows)
+        {
+            place_attached_to_zone(*info_ptr, zone_rect);
+
+            auto& info = *info_ptr;
+            Rectangle exclusive_rect{
+                info.exclusive_rect().value().top_left + as_displacement(info.window().top_left()),
+                info.exclusive_rect().value().size};
+
+            zone_rect = apply_exclusive_rect_to_application_zone(zone_rect, exclusive_rect, info.attached_edges());
+        }
+
+        for (auto info_ptr : maximized_windows)
         {
             place_attached_to_zone(*info_ptr, zone_rect);
         }

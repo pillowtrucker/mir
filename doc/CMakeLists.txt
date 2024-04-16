@@ -21,18 +21,13 @@ if(DOXYGEN_FOUND)
   endif()
 
   configure_file(
-      ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/custom_conf.py.in
-      ${CMAKE_CURRENT_BINARY_DIR}/sphinx/custom_conf.py @ONLY IMMEDIATE
-  )
-
-  configure_file(
       ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/Doxyfile.in
       ${CMAKE_CURRENT_BINARY_DIR}/sphinx/Doxyfile @ONLY IMMEDIATE
   )
 
   configure_file(
-      ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/introducing_the_miral_api.md.in
-      ${CMAKE_CURRENT_BINARY_DIR}/sphinx/introducing_the_miral_api.md @ONLY IMMEDIATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/reference/introducing_the_miral_api.md.in
+      ${CMAKE_CURRENT_BINARY_DIR}/sphinx/reference/introducing_the_miral_api.md @ONLY IMMEDIATE
   )
 
   # use the starter pack Makefile

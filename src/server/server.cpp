@@ -30,7 +30,6 @@
 #include "mir/main_loop.h"
 #include "mir/report_exception.h"
 #include "mir/run_mir.h"
-#include "mir/cookie/authority.h"
 
 // TODO these are used to frig a stub renderer when running headless
 #include "mir/renderer/renderer.h"
@@ -100,7 +99,6 @@ struct TemporaryCompositeEventFilter : public mi::CompositeEventFilter
     MACRO(session_listener)\
     MACRO(shell)\
     MACRO(application_not_responding_detector)\
-    MACRO(cookie_authority)\
     MACRO(persistent_surface_store)
 
 #define FOREACH_ACCESSOR(MACRO)\
@@ -132,7 +130,8 @@ struct TemporaryCompositeEventFilter : public mi::CompositeEventFilter
     MACRO(the_application_not_responding_detector)\
     MACRO(the_persistent_surface_store)\
     MACRO(the_display_configuration_observer_registrar)\
-    MACRO(the_seat_observer_registrar)
+    MACRO(the_seat_observer_registrar)\
+    MACRO(the_session_lock)
 
 #define MIR_SERVER_BUILDER(name)\
     std::function<std::invoke_result_t<decltype(&mir::DefaultServerConfiguration::the_##name),mir::DefaultServerConfiguration*>()> name##_builder;
@@ -738,6 +737,20 @@ void mir::Server::add_configuration_option(
                     config.add_options()
                     (option.c_str(), po::value<std::vector<std::string>>(), description.c_str());
                 };
+
+            self->set_add_configuration_options(option_adder);
+        }
+        break;
+
+        case OptionType::real:
+        {
+            auto const option_adder = [=](options::DefaultConfiguration& config)
+            {
+                existing(config);
+
+                config.add_options()
+                        (option.c_str(), po::value<double>(), description.c_str());
+            };
 
             self->set_add_configuration_options(option_adder);
         }

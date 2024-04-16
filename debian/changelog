@@ -1,3 +1,93 @@
+mir (2.16.4) UNRELEASED; urgency=medium
+
+  * Bugfix release:
+    - Ignoring zero length gamma curves for KMS outputs (Fixes: #3238)
+    - Add hardware cursor support (Fixes: #3198)
+    - Screenshots now respect clipping areas and rotated outputs (Fixes: #3236)
+      (Fixes: #3259)
+    - Fixed custom attributes propagation on outputs
+      (Fixes: https://github.com/canonical/ubuntu-frame/issues/172)
+    - Handle the Ubuntu 64-bit time_t apocalypse (Fixes: #3285)
+
+ -- Matthew Kosarek <matt.kosarek@canonical.com>  Wed, 27 Mar 2024 14:34:35 -0500
+
+mir (2.16.3) UNRELEASED; urgency=medium
+
+  * Bugfix release:
+    - Do not kill X11 apps whose pop-ups don't support WM_DELETE_WINDOW
+    - When the layout of the texture disagrees with the layout of the output
+      surface, then the clip area needs to be modified. (Fixes: #3201)
+    - [graphics platforms] Allow for multiple RenderingPlatforms of each type
+      (Fixes: #3205)
+
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Wed, 17 Jan 2024 09:40:21 +0000
+
+mir (2.16.2) UNRELEASED; urgency=medium
+
+  * Bugfix release:
+    - Display with orientation: left/right flipped on arm64 (#3185)
+
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Wed, 17 Jan 2024 09:40:21 +0000
+
+mir (2.16.1) UNRELEASED; urgency=medium
+
+  * Bugfix release:
+    -  Changing scale factor at runtime leads to misrendering (#3165)
+
+ -- Michał Sawicz <michal.sawicz@canonical.com>  Tue, 02 Jan 2024 11:53:02 +0100
+
+mir (2.16.0) UNRELEASED; urgency=medium
+
+  [ Alan Griffiths ]
+  * New upstream release 2.16.0
+
+    - ABI summary:
+      . miral ABI unchanged at 6
+      . mircommon ABI unchanged at 9
+      . mircookie ABI unchanged at 2
+      . mircore ABI unchanged at 2
+      . miroil ABI unchanged at 3
+      . mirplatform ABI bumped to 27
+      . mirserver ABI bumped to 59
+      . mirwayland ABI unchanged at 3
+      . mirplatformgraphics ABI bumped to 21
+      . mirinputplatform ABI unchanged at 8
+    - Enhancements:
+      . [Wayland] Implementation of input-method-v1 for maliit-keyboard
+        support. (Fixes: #2777)
+      . [mir:wayland] Fix size and scale: Less broken display on scaled hosts.
+        (Fixes: #3036)
+      . [mir:x11] Detect host refresh rate/max fps for Mir-on-X client
+      . [graphics platforms] Decouple display and rendering platforms, enable
+        multiple display platforms
+      . [graphics platforms] Add virtual output display platform
+      . [graphics platforms] Fixing the platform-input-lib parameter so that it
+        behaves how you would expect it to. (Fixes #3073)
+      . [seamless boot] Disable the initial set of the CRTC when modes match (A
+        prerequisite for flicker-free startup)
+      . [seamless boot] Support for not compositing until at least one
+        renderable has been sent to the compositor
+      . Add display-autoscale option to miral::display_configuration_options()
+      . Add --mir-version command line option. (Fixes: #3058)
+      . Decoupling writing the display configuration from processing it
+      . Rework the demo client to use xdg-shell
+      . Refactored the demo client to support the virtual platform
+    - Bugs fixed:
+      . Ensure the signatures of our drm intercept functions are correct.
+        (Fixes: #3019)
+      . Fix locking in mgw::DisplayClient(). (Fixes: #2011)
+      . Ensure we send a configure when we resize. (Fixes: #2040)
+      . Avoid spurious configure events. (Fixes: 3046)
+      . [Xwayland] Fix broken rescaling. (Fixes: #2509)
+      . [Xwayland] improve handling of CLion subsidiary windows (Fixes: #3024,
+        #2326 and #3107)
+      . Fix MirRunner::stop() threading. (Fixes: #3070)
+      . Fix processing of `--platform-*-libs`. (Fixes: #3088)
+      . [VT console provider] Input device not recognised after
+        disconnect/reconnect cycle (Fixes: #3149)
+
+ -- Alan Griffiths <alan.griffiths@canonical.com>  Wed, 22 Nov 2023 12:18:22 +0000
+
 mir (2.15.0) UNRELEASED; urgency=medium
 
   [ Michał Sawicz ]

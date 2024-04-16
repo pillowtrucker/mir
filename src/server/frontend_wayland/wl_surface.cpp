@@ -96,8 +96,6 @@ mf::WlSurface::WlSurface(
         null_role{this},
         role{&null_role}
 {
-    // wl_surface is specified to act in mailbox mode
-    stream->allow_framedropping(true);
 }
 
 mf::WlSurface::~WlSurface()
@@ -467,6 +465,11 @@ auto mf::WlSurface::confine_pointer_state() const -> MirPointerConfinementState
     }
 
     return mir_pointer_unconfined;
+}
+
+void mir::frontend::WlSurface::update_surface_spec(shell::SurfaceSpecification const& spec)
+{
+    pending.surface_spec.update_from(spec);
 }
 
 mf::NullWlSurfaceRole::NullWlSurfaceRole(WlSurface* surface) :

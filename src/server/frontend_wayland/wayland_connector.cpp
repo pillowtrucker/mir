@@ -26,6 +26,8 @@
 #include "frame_executor.h"
 #include "output_manager.h"
 #include "wayland_executor.h"
+#include "desktop_file_manager.h"
+#include "foreign_toplevel_manager_v1.h"
 
 #include "mir/main_loop.h"
 #include "mir/thread_name.h"
@@ -237,14 +239,16 @@ mf::WaylandConnector::WaylandConnector(
     bool arw_socket,
     std::unique_ptr<WaylandExtensions> extensions_,
     WaylandProtocolExtensionFilter const& extension_filter,
-    bool enable_key_repeat)
+    bool enable_key_repeat,
+    std::shared_ptr<scene::SessionLock> const& session_lock)
     : extension_filter{extension_filter},
       display{wl_display_create(), &cleanup_display},
       pause_signal{eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE)},
       executor{std::make_shared<WaylandExecutor>(wl_display_get_event_loop(display.get()))},
       allocator{allocator_for_display(allocator, display.get(), executor)},
       shell{shell},
-      extensions{std::move(extensions_)}
+      extensions{std::move(extensions_)},
+      session_lock_{session_lock}
 {
     if (pause_signal == mir::Fd::invalid)
     {
@@ -294,6 +298,9 @@ mf::WaylandConnector::WaylandConnector(
         executor,
         display_config_registrar);
 
+    desktop_file_manager = std::make_shared<mf::DesktopFileManager>(
+        std::make_shared<mf::GDesktopFileCache>(main_loop));
+
     data_device_manager_global = std::make_unique<WlDataDeviceManager>(
         display.get(),
         executor,
@@ -316,7 +323,10 @@ mf::WaylandConnector::WaylandConnector(
         input_device_registry,
         composite_event_filter,
         allocator,
-        screen_shooter});
+        screen_shooter,
+        main_loop,
+        desktop_file_manager,
+        session_lock_});
 
     shm_global = std::make_unique<WlShm>(display.get(), executor);
 

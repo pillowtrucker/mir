@@ -64,6 +64,7 @@ class Session;
 class Clipboard;
 class TextInputHub;
 class IdleHub;
+class SessionLock;
 }
 
 class MainLoop;
@@ -91,7 +92,6 @@ public:
     virtual auto the_display_platforms() -> std::vector<std::shared_ptr<graphics::DisplayPlatform>> const& = 0;
     virtual auto the_rendering_platforms() -> std::vector<std::shared_ptr<graphics::RenderingPlatform>> const& = 0;
     virtual std::shared_ptr<EmergencyCleanup> the_emergency_cleanup() = 0;
-    virtual std::shared_ptr<cookie::Authority> the_cookie_authority() = 0;
     virtual auto the_fatal_error_strategy() -> void (*)(char const* reason, ...) = 0;
     virtual std::shared_ptr<scene::ApplicationNotRespondingDetector> the_application_not_responding_detector() = 0;
     virtual std::shared_ptr<scene::Clipboard> the_main_clipboard() = 0;
@@ -105,6 +105,7 @@ public:
         std::function<std::shared_ptr<void>(
             wl_display*,
             std::function<void(std::function<void()>&& work)> const&)> builder) = 0;
+    virtual std::shared_ptr<scene::SessionLock> the_session_lock() = 0;
 
     using WaylandProtocolExtensionFilter = std::function<bool(std::shared_ptr<scene::Session> const&, char const*)>;
     virtual void set_wayland_extension_filter(WaylandProtocolExtensionFilter const& extension_filter) = 0;

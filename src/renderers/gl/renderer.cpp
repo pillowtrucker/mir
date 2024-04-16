@@ -377,23 +377,27 @@ auto mrg::Renderer::render(mg::RenderableList const& renderables) const -> std::
 
 void mrg::Renderer::draw(mg::Renderable const& renderable) const
 {
+    auto const texture = gl_interface->as_texture(renderable.buffer());
     auto const clip_area = renderable.clip_area();
     if (clip_area)
     {
         glEnable(GL_SCISSOR_TEST);
+        auto clip_x = clip_area.value().top_left.x.as_int();
+        // The Y-coordinate is always relative to the top, so we make it relative to the bottom.
+        auto clip_y = viewport.top_left.y.as_int() +
+          viewport.size.height.as_int() -
+          clip_area.value().top_left.y.as_int() -
+          clip_area.value().size.height.as_int();
+        glm::vec4 clip_pos(clip_x, clip_y, 0, 1);
+        clip_pos = display_transform * clip_pos;
+
         glScissor(
-            clip_area.value().top_left.x.as_int() -
-                viewport.top_left.x.as_int(),
-            viewport.top_left.y.as_int() +
-                viewport.size.height.as_int() -
-                clip_area.value().top_left.y.as_int() -
-                clip_area.value().size.height.as_int(),
-            clip_area.value().size.width.as_int(), 
+            (int)clip_pos.x - viewport.top_left.x.as_int(),
+            (int)clip_pos.y,
+            clip_area.value().size.width.as_int(),
             clip_area.value().size.height.as_int()
         );
     }
-
-    auto const texture = gl_interface->as_texture(renderable.buffer());
 
     // All the programs are held by program_factory through its lifetime. Using pointers avoids
     // -Wdangling-reference.
@@ -622,12 +626,12 @@ void mrg::Renderer::set_output_transform(glm::mat2 const& t)
     case graphics::gl::OutputSurface::Layout::TopRowFirst:
         // GL is going to render in its own coordinate system, but the OutputSurface
         // wants the output to be the other way up. Get GL to render upside-down instead.
-        new_display_transform *= glm::mat4{
+        new_display_transform = glm::mat4{
             1.0, 0.0, 0.0, 0.0,
             0.0, -1.0, 0.0, 0.0,
             0.0, 0.0, 1.0, 0.0,
             0.0, 0.0, 0.0, 1.0
-        };
+        } * new_display_transform;
         break;
     }
 

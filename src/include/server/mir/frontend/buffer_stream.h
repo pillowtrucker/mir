@@ -44,14 +44,8 @@ public:
     virtual void set_frame_posted_callback(
         std::function<void(geometry::Size const&)> const& callback) = 0;
 
-    virtual void with_most_recent_buffer_do(
-        std::function<void(graphics::Buffer&)> const& exec) = 0;
-
     virtual MirPixelFormat pixel_format() const = 0;
 
-    //TODO: framedropping for swapinterval-0 can probably be effectively managed from the client
-    //      side once we only support the NBS system.
-    virtual void allow_framedropping(bool) = 0;
     virtual void set_scale(float scale) = 0;
 protected:
     BufferStream() = default;

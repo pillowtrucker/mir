@@ -185,6 +185,7 @@ std::string object_path_for_current_session(LogindSeat* seat_proxy)
         BOOST_THROW_EXCEPTION((std::runtime_error{"Seat has no active session"}));
     }
 
+    mir::log_debug("Discovered object path for current session = %s", object_path);
     return {object_path};
 }
 
@@ -238,8 +239,21 @@ connect_to_system_bus(mir::GLibMainLoop& ml)
 }
 }
 
-mir::LogindConsoleServices::LogindConsoleServices(std::shared_ptr<mir::GLibMainLoop> const& ml)
-    : ml{ml},
+std::shared_ptr<mir::LogindConsoleServices> mir::LogindConsoleServices::create(
+    std::shared_ptr<GLibMainLoop> main_loop,
+    std::shared_ptr<scene::SessionLock> session_lock_instance)
+{
+    std::shared_ptr<mir::LogindConsoleServices>cs(new LogindConsoleServices(
+        std::move(main_loop), session_lock_instance));
+    session_lock_instance->register_interest(cs);
+    return cs;
+}
+
+mir::LogindConsoleServices::LogindConsoleServices(
+    std::shared_ptr<mir::GLibMainLoop> main_loop,
+    std::shared_ptr<scene::SessionLock> lock)
+    : ml{std::move(main_loop)},
+      session_lock{std::move(lock)},
       connection{connect_to_system_bus(*ml)},
       seat_proxy{
         simple_seat_proxy_on_system_bus(*ml, connection.get(), "/org/freedesktop/login1/seat/seat0")},
@@ -299,6 +313,17 @@ mir::LogindConsoleServices::LogindConsoleServices(std::shared_ptr<mir::GLibMainL
         this,
         nullptr);
 #endif
+
+    g_signal_connect(
+        G_OBJECT(session_proxy.get()),
+        "lock",
+        G_CALLBACK(&LogindConsoleServices::request_lock),
+        this);
+    g_signal_connect(
+        G_OBJECT(session_proxy.get()),
+        "unlock",
+        G_CALLBACK(&LogindConsoleServices::request_unlock),
+        this);
 }
 
 void mir::LogindConsoleServices::register_switch_handlers(
@@ -676,7 +701,7 @@ void mir::LogindConsoleServices::on_pause_device(
         using namespace std::literals::string_literals;
         if ("pause"s == suspend_type)
         {
-            mir::log_debug("Received logind pause event for device %i:%i", major, minor);
+            mir::log_info("Received logind pause event for device %i:%i", major, minor);
             it->second->emit_suspended();
             logind_session_call_pause_device_complete(
                 me->session_proxy.get(),
@@ -687,7 +712,7 @@ void mir::LogindConsoleServices::on_pause_device(
         }
         else if ("force"s == suspend_type)
         {
-            mir::log_debug("Received logind force-pause event for device %i:%i", major, minor);
+            mir::log_info("Received logind force-pause event for device %i:%i", major, minor);
             it->second->emit_suspended();
         }
         else if ("gone"s == suspend_type)
@@ -816,6 +841,24 @@ GDBusMessage* mir::LogindConsoleServices::resume_device_dbus_filter(
 }
 #endif
 
+void mir::LogindConsoleServices::request_lock(
+    GObject*,
+    gpointer ctx) noexcept
+{
+    mir::log_info("Received Lock() signal for this session from logind");
+    auto me = static_cast<LogindConsoleServices*>(ctx);
+    me->session_lock->lock();
+}
+
+void mir::LogindConsoleServices::request_unlock(
+    GObject*,
+    gpointer ctx) noexcept
+{
+    mir::log_info("Received Unlock() signal for this session from logind");
+    auto me = static_cast<LogindConsoleServices*>(ctx);
+    me->session_lock->unlock();
+}
+
 namespace
 {
 class LogindVTSwitcher : public mir::VTSwitcher
@@ -890,4 +933,16 @@ std::unique_ptr<mir::VTSwitcher> mir::LogindConsoleServices::create_vt_switcher(
 mir::LogindConsoleServices::~LogindConsoleServices()
 {
     restore();
+}
+
+void mir::LogindConsoleServices::on_lock()
+{
+    mir::log_info("Notifying logind of session lock");
+    logind_session_set_locked_hint(session_proxy.get(), true);
+}
+
+void mir::LogindConsoleServices::on_unlock()
+{
+    mir::log_info("Notifying logind of session unlock");
+    logind_session_set_locked_hint(session_proxy.get(), false);
 }

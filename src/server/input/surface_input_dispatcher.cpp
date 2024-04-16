@@ -23,7 +23,6 @@
 #include "mir/scene/null_surface_observer.h"
 #include "mir/events/event_helpers.h"
 #include "mir/events/pointer_event.h"
-#include "mir_toolkit/mir_cookie.h"
 
 #include <boost/throw_exception.hpp>
 #include <stdexcept>
@@ -114,20 +113,10 @@ void deliver_without_relative_motion(std::shared_ptr<mi::Surface> const& surface
 {
     auto const* input_ev = mir_event_get_input_event(ev);
     auto const* pev = mir_input_event_get_pointer_event(input_ev);
-    std::vector<uint8_t> cookie_data;
-    if (mir_input_event_has_cookie(input_ev))
-    {
-        auto cookie = mir_input_event_get_cookie(input_ev);
-        cookie_data.resize(mir_cookie_buffer_size(cookie));
-        mir_cookie_to_buffer(cookie, cookie_data.data(), mir_cookie_buffer_size(cookie));
-        mir_cookie_release(cookie);
-    }
     auto const& bounds = surface->input_bounds();
-
     auto to_deliver = mev::make_pointer_event(
         mir_input_event_get_device_id(input_ev),
         std::chrono::nanoseconds{mir_input_event_get_event_time(input_ev)},
-        cookie_data,
         mir_pointer_event_modifiers(pev),
         mir_pointer_event_action(pev),
         mir_pointer_event_buttons(pev),
@@ -255,7 +244,6 @@ bool dispatch_scene_change_enter_exit_events(
             auto const event = mev::make_pointer_event(
                 mir_input_event_get_device_id(ctx.iev),
                 std::chrono::nanoseconds{std::chrono::steady_clock::now().time_since_epoch()},
-                std::vector<uint8_t>{},
                 0, // TODO: We need the current keyboard state
                 mir_pointer_action_leave,
                 mir_pointer_event_buttons(ctx.pev),
@@ -277,7 +265,6 @@ bool dispatch_scene_change_enter_exit_events(
             auto const event = mev::make_pointer_event(
                 mir_input_event_get_device_id(ctx.iev),
                 std::chrono::nanoseconds{std::chrono::steady_clock::now().time_since_epoch()},
-                std::vector<uint8_t>{},
                 0, // TODO: We need the current keyboard state
                 mir_pointer_action_enter,
                 mir_pointer_event_buttons(ctx.pev),
@@ -311,7 +298,6 @@ void send_motion_event_to_moved_surface(
         auto const event = mev::make_pointer_event(
             mir_input_event_get_device_id(ctx.iev),
             std::chrono::nanoseconds{std::chrono::steady_clock::now().time_since_epoch()},
-            std::vector<uint8_t>{},
             0, // TODO: We need the current keyboard state
             mir_pointer_action_motion,
             0,
@@ -414,7 +400,7 @@ void for_pressed_buttons(MirPointerEvent const* pev, std::function<void(MirPoint
     for (auto button : buttons)
         if (mir_pointer_event_button_state(pev, button)) exec(button);
 }
-    
+
 bool is_gesture_terminator(MirPointerEvent const* pev)
 {
     bool any_pressed = false;
@@ -585,7 +571,7 @@ bool mi::SurfaceInputDispatcher::dispatch_touch(MirInputDeviceId id, MirEvent co
 
         return true;
     }
-        
+
     return false;
 }
 
@@ -593,7 +579,7 @@ bool mi::SurfaceInputDispatcher::dispatch(std::shared_ptr<MirEvent const> const&
 {
     if (mir_event_get_type(event.get()) != mir_event_type_input)
         BOOST_THROW_EXCEPTION(std::logic_error("InputDispatcher got an unexpected event type"));
-    
+
     auto iev = mir_event_get_input_event(event.get());
     auto id = mir_input_event_get_device_id(iev);
     switch (mir_input_event_get_type(iev))
@@ -656,6 +642,13 @@ void mir::input::SurfaceInputDispatcher::register_interest(
     Executor& executor)
 {
     keyboard_multiplexer.register_interest(observer, executor);
+}
+
+void mir::input::SurfaceInputDispatcher::register_early_observer(
+    std::weak_ptr<KeyboardObserver> const& observer,
+    Executor& executor)
+{
+    keyboard_multiplexer.register_early_observer(observer, executor);
 }
 
 void mir::input::SurfaceInputDispatcher::unregister_interest(KeyboardObserver const& observer)

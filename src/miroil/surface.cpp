@@ -39,8 +39,7 @@ public:
                            std::weak_ptr<mir::graphics::CursorImage> const& image) override;
   void depth_layer_set_to(mir::scene::Surface const *surf,
                           MirDepthLayer depth_layer) override;
-  void frame_posted(mir::scene::Surface const *surf, int frames_available,
-                    mir::geometry::Rectangle const& area) override;
+  void frame_posted(mir::scene::Surface const *surf, mir::geometry::Rectangle const& area) override;
   void hidden_set_to(mir::scene::Surface const *surf, bool hide) override;
   void input_consumed(mir::scene::Surface const *surf,
                       std::shared_ptr<MirEvent const> const& event) override;
@@ -58,6 +57,8 @@ public:
                              glm::mat4 const &t) override;
   void window_resized_to(mir::scene::Surface const *surf,
                          mir::geometry::Size const &window_size) override;
+  void entered_output(mir::scene::Surface const* surf, mir::graphics::DisplayConfigurationOutputId const& id) override;
+  void left_output(mir::scene::Surface const* surf, mir::graphics::DisplayConfigurationOutputId const& id) override;
 
 private:
   std::shared_ptr<miroil::SurfaceObserver> listener;
@@ -113,9 +114,9 @@ void miroil::SurfaceObserverImpl::depth_layer_set_to(mir::scene::Surface const* 
     listener->depth_layer_set_to(surf, depth_layer);
 }
 
-void miroil::SurfaceObserverImpl::frame_posted(mir::scene::Surface const* surf, int frames_available, mir::geometry::Rectangle const& area)
+void miroil::SurfaceObserverImpl::frame_posted(mir::scene::Surface const* surf, mir::geometry::Rectangle const& area)
 {
-    listener->frame_posted(surf, frames_available, area.size);
+    listener->frame_posted(surf, 1, area.size);
 }
 
 void miroil::SurfaceObserverImpl::hidden_set_to(mir::scene::Surface const* surf, bool hide)
@@ -158,9 +159,21 @@ void miroil::SurfaceObserverImpl::window_resized_to(mir::scene::Surface const* s
     listener->window_resized_to(surf, window_size);
 }
 
+void miroil::SurfaceObserverImpl::entered_output(
+    mir::scene::Surface const* /*surf*/,
+    mir::graphics::DisplayConfigurationOutputId const& /*id*/)
+{
+}
+
+void miroil::SurfaceObserverImpl::left_output(
+    mir::scene::Surface const* /*surf*/,
+    mir::graphics::DisplayConfigurationOutputId const& /*id*/)
+{
+}
+
 miroil::Surface::Surface(std::shared_ptr<mir::scene::Surface> wrapped) :
      wrapped(wrapped)
-{    
+{
 }
 
 void miroil::Surface::add_observer(std::shared_ptr<SurfaceObserver> const& observer)
@@ -168,7 +181,7 @@ void miroil::Surface::add_observer(std::shared_ptr<SurfaceObserver> const& obser
     auto it = observers.find(observer);
     if (it == observers.end()) {
         std::shared_ptr<SurfaceObserverImpl> impl = std::make_shared<SurfaceObserverImpl>(observer);
-        
+
         wrapped->register_interest(impl, mir::immediate_executor);
         observers.insert({observer, impl});
     }
@@ -183,20 +196,15 @@ bool miroil::Surface::is_confined_to_window()
 void miroil::Surface::remove_observer(std::shared_ptr<miroil::SurfaceObserver> const& observer)
 {
     auto it = observers.find(observer);
-    if (it != observers.end()) {        
+    if (it != observers.end()) {
         wrapped->unregister_interest(*it->second);
-        observers.erase(it);        
+        observers.erase(it);
     }
 }
 
 auto miroil::Surface::get_wrapped() const -> mir::scene::Surface*
 {
     return wrapped.get();
-}
-
-int miroil::Surface::buffers_ready_for_compositor(void const* compositor_id) const
-{
-    return wrapped->buffers_ready_for_compositor(compositor_id);
 }
 
 mir::graphics::RenderableList miroil::Surface::generate_renderables(miroil::CompositorID id) const

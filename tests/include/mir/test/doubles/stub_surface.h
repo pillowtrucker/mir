@@ -49,7 +49,6 @@ struct StubSurface : scene::Surface
     void set_transformation(glm::mat4 const&) override {}
     bool visible() const override { return false; }
     graphics::RenderableList generate_renderables(compositor::CompositorID) const override { return {}; }
-    int buffers_ready_for_compositor(void const*) const override { return 0; }
     MirWindowType type() const override { return mir_window_type_normal; }
     auto state_tracker() const -> scene::SurfaceStateTracker override
     {
@@ -67,6 +66,7 @@ struct StubSurface : scene::Surface
     std::shared_ptr<Surface> parent() const override { return nullptr; }
     void register_interest(std::weak_ptr<scene::SurfaceObserver> const&) override {}
     void register_interest(std::weak_ptr<scene::SurfaceObserver> const&, Executor&) override {}
+    void register_early_observer(std::weak_ptr<scene::SurfaceObserver> const&, Executor&) override {}
     void unregister_interest(scene::SurfaceObserver const&) override {}
     void rename(std::string const&) override {}
     void set_confine_pointer_state(MirPointerConfinementState) override {}

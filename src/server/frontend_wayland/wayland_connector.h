@@ -65,6 +65,7 @@ class Clipboard;
 class IdleHub;
 class Surface;
 class TextInputHub;
+class SessionLock;
 }
 namespace time
 {
@@ -83,6 +84,7 @@ class WlSeat;
 class WlShm;
 class WlSubcompositor;
 class WlSurface;
+class DesktopFileManager;
 
 class WaylandExtensions
 {
@@ -105,6 +107,9 @@ public:
         std::shared_ptr<input::CompositeEventFilter> composite_event_filter;
         std::shared_ptr<graphics::GraphicBufferAllocator> graphic_buffer_allocator;
         std::shared_ptr<compositor::ScreenShooter> screen_shooter;
+        std::shared_ptr<MainLoop> main_loop;
+        std::shared_ptr<DesktopFileManager> desktop_file_manager;
+        std::shared_ptr<scene::SessionLock> session_lock;
     };
 
     WaylandExtensions() = default;
@@ -155,7 +160,8 @@ public:
         bool arw_socket,
         std::unique_ptr<WaylandExtensions> extensions,
         WaylandProtocolExtensionFilter const& extension_filter,
-        bool enable_key_repeat);
+        bool enable_key_repeat,
+        std::shared_ptr<scene::SessionLock> const& session_lock);
 
     ~WaylandConnector() override;
 
@@ -198,12 +204,14 @@ private:
     std::unique_ptr<WlSubcompositor> subcompositor_global;
     std::unique_ptr<WlSeat> seat_global;
     std::unique_ptr<OutputManager> output_manager;
+    std::shared_ptr<DesktopFileManager> desktop_file_manager;
     std::unique_ptr<WlDataDeviceManager> data_device_manager_global;
     std::unique_ptr<WlShm> shm_global;
     std::shared_ptr<Executor> const executor;
     std::shared_ptr<graphics::GraphicBufferAllocator> const allocator;
     std::shared_ptr<shell::Shell> const shell;
     std::unique_ptr<WaylandExtensions> const extensions;
+    std::shared_ptr<scene::SessionLock> session_lock_;
     std::thread dispatch_thread;
     wl_event_source* pause_source;
     std::string wayland_display;

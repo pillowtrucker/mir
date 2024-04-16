@@ -19,18 +19,21 @@
 #include "mir/frontend/event_sink.h"
 #include "mir/graphics/buffer.h"
 #include "mir/graphics/cursor_image.h"
+#include "mir/graphics/null_display_configuration_observer.h"
 #include "mir/graphics/pixel_format_utils.h"
 #include "mir/geometry/displacement.h"
 #include "mir/renderer/sw/pixel_source.h"
 #include "mir/observer_multiplexer.h"
+#include "mir/scene/surface_observer.h"
 
 #include "mir/scene/scene_report.h"
-#include "mir/scene/null_surface_observer.h"
 
 #include <boost/throw_exception.hpp>
 
-#include <stdexcept>
 #include <algorithm>
+#include <cstring>
+#include <latch>
+#include <stdexcept>
 
 namespace mc = mir::compositor;
 namespace ms = mir::scene;
@@ -40,6 +43,25 @@ namespace mf = mir::frontend;
 namespace mw = mir::wayland;
 namespace geom = mir::geometry;
 namespace mrs = mir::renderer::software;
+
+class ms::BasicSurface::DisplayConfigurationEarlyListener :  public mg::NullDisplayConfigurationObserver
+{
+public:
+    explicit DisplayConfigurationEarlyListener(BasicSurface* surface) : surface{surface} {}
+
+private:
+    void initial_configuration(std::shared_ptr<mg::DisplayConfiguration const> const& config) override
+    {
+        surface->display_config = config;
+    }
+    void configuration_applied(std::shared_ptr<mg::DisplayConfiguration const> const& config) override
+    {
+        surface->display_config = config;
+        surface->track_outputs();
+    }
+
+    BasicSurface* surface;
+};
 
 class ms::BasicSurface::Multiplexer : public ObserverMultiplexer<SurfaceObserver>
 {
@@ -74,9 +96,9 @@ public:
         for_each_observer(&SurfaceObserver::hidden_set_to, surf, hide);
     }
 
-    void frame_posted(Surface const* surf, int frames_available, geometry::Rectangle const& damage) override
+    void frame_posted(Surface const* surf, geometry::Rectangle const& damage) override
     {
-        for_each_observer(&SurfaceObserver::frame_posted, surf, frames_available, damage);
+        for_each_observer(&SurfaceObserver::frame_posted, surf, damage);
     }
 
     void alpha_set_to(Surface const* surf, float alpha) override
@@ -138,6 +160,16 @@ public:
     {
         for_each_observer(&SurfaceObserver::application_id_set_to, surf, application_id);
     }
+
+    void entered_output(Surface const* surf, graphics::DisplayConfigurationOutputId const& id) override
+    {
+        for_each_observer(&SurfaceObserver::entered_output, surf, id);
+    }
+
+    void left_output(Surface const* surf, graphics::DisplayConfigurationOutputId const& id) override
+    {
+        for_each_observer(&SurfaceObserver::left_output, surf, id);
+    }
 };
 
 namespace
@@ -163,7 +195,8 @@ ms::BasicSurface::BasicSurface(
     MirPointerConfinementState confinement_state,
     std::list<StreamInfo> const& layers,
     std::shared_ptr<mg::CursorImage> const& cursor_image,
-    std::shared_ptr<SceneReport> const& report) :
+    std::shared_ptr<SceneReport> const& report,
+    std::shared_ptr<ObserverRegistrar<mg::DisplayConfigurationObserver>> const& display_config_registrar) :
     synchronised_state{
         State {
             .surface_name = name,
@@ -182,11 +215,14 @@ ms::BasicSurface::BasicSurface(
     surface_buffer_stream(default_stream(layers)),
     report(report),
     parent_(parent),
-    wayland_surface_{wayland_surface}
+    wayland_surface_{wayland_surface},
+    display_config_registrar{display_config_registrar},
+    display_config_monitor{std::make_shared<DisplayConfigurationEarlyListener>(this)}
 {
     auto state = synchronised_state.lock();
     update_frame_posted_callbacks(*state);
     report->surface_created(this, state->surface_name);
+    display_config_registrar->register_early_observer(display_config_monitor, immediate_executor);
 }
 
 ms::BasicSurface::BasicSurface(
@@ -197,7 +233,8 @@ ms::BasicSurface::BasicSurface(
     MirPointerConfinementState state,
     std::list<StreamInfo> const& layers,
     std::shared_ptr<mg::CursorImage> const& cursor_image,
-    std::shared_ptr<SceneReport> const& report) :
+    std::shared_ptr<SceneReport> const& report,
+    std::shared_ptr<ObserverRegistrar<graphics::DisplayConfigurationObserver>> const& display_config_registrar) :
     BasicSurface(
         session,
         wayland_surface,
@@ -207,7 +244,8 @@ ms::BasicSurface::BasicSurface(
         state,
         layers,
         cursor_image,
-        report)
+        report,
+        display_config_registrar)
 {
 }
 
@@ -216,6 +254,7 @@ ms::BasicSurface::~BasicSurface() noexcept
     auto state = synchronised_state.lock();
     clear_frame_posted_callbacks(*state);
     report->surface_deleted(this, state->surface_name);
+    display_config_registrar->unregister_interest(*display_config_monitor);
 }
 
 void ms::BasicSurface::register_interest(std::weak_ptr<SurfaceObserver> const& observer)
@@ -226,6 +265,11 @@ void ms::BasicSurface::register_interest(std::weak_ptr<SurfaceObserver> const& o
 void ms::BasicSurface::register_interest(std::weak_ptr<SurfaceObserver> const& observer, Executor& executor)
 {
     observers->register_interest(observer, executor);
+}
+
+void ms::BasicSurface::register_early_observer(std::weak_ptr<SurfaceObserver> const& observer, Executor& executor)
+{
+    observers->register_early_observer(observer, executor);
 }
 
 void ms::BasicSurface::unregister_interest(SurfaceObserver const& observer)
@@ -242,6 +286,7 @@ void ms::BasicSurface::move_to(geometry::Point const& top_left)
 {
     synchronised_state.lock()->surface_rect.top_left = top_left;
     observers->moved_to(this, top_left);
+    linearised_track_outputs();
 }
 
 void ms::BasicSurface::set_hidden(bool hide)
@@ -299,6 +344,7 @@ void ms::BasicSurface::resize(geom::Size const& desired_size)
 
         observers->window_resized_to(this, new_size);
         observers->content_resized_to(this, content_size_);
+        linearised_track_outputs();
     }
 }
 
@@ -321,7 +367,7 @@ bool ms::BasicSurface::input_area_contains(geom::Point const& point) const
     if (!visible(*state))
         return false;
 
-    if (state->clip_area) 
+    if (state->clip_area)
     {
         if (!state->clip_area.value().contains(point))
             return false;
@@ -440,28 +486,6 @@ MirWindowState ms::BasicSurface::set_state(MirWindowState s)
     return s;
 }
 
-int ms::BasicSurface::set_swap_interval(int interval)
-{
-    if (interval < 0)
-    {
-        BOOST_THROW_EXCEPTION(std::logic_error("Invalid swapinterval"));
-    }
-
-    auto state = synchronised_state.lock();
-    if (state->swap_interval != interval)
-    {
-        state->swap_interval = interval;
-        bool allow_dropping = (interval == 0);
-        for (auto& info : state->layers)
-            info.stream->allow_framedropping(allow_dropping);
-
-        state.drop();
-        observers->attrib_changed(this, mir_window_attrib_swapinterval, interval);
-    }
-
-    return interval;
-}
-
 MirOrientationMode ms::BasicSurface::set_preferred_orientation(MirOrientationMode new_orientation_mode)
 {
     if ((new_orientation_mode & mir_orientation_mode_any) == 0)
@@ -495,9 +519,6 @@ int ms::BasicSurface::configure(MirWindowAttrib attrib, int value)
     case mir_window_attrib_focus:
         set_focus_state(static_cast<MirWindowFocusState>(result));
         break;
-    case mir_window_attrib_swapinterval:
-        result = set_swap_interval(result);
-        break;
     case mir_window_attrib_dpi:
         result = set_dpi(result);
         break;
@@ -521,7 +542,6 @@ int ms::BasicSurface::query(MirWindowAttrib attrib) const
     {
         case mir_window_attrib_type: return state->type;
         case mir_window_attrib_state: return state->state.active_state();
-        case mir_window_attrib_swapinterval: return state->swap_interval;
         case mir_window_attrib_focus: return state->focus;
         case mir_window_attrib_dpi: return state->dpi;
         case mir_window_attrib_visibility: return state->visibility;
@@ -651,12 +671,6 @@ MirWindowVisibility ms::BasicSurface::set_visibility(MirWindowVisibility new_vis
     {
         state->visibility = new_visibility;
 
-        if (new_visibility == mir_window_visibility_exposed)
-        {
-            for (auto& info : state->layers)
-                info.stream->drop_old_buffers();
-        }
-
         state.drop();
 
         observers->attrib_changed(this, mir_window_attrib_visibility, new_visibility);
@@ -734,15 +748,6 @@ private:
 };
 }
 
-int ms::BasicSurface::buffers_ready_for_compositor(void const* id) const
-{
-    auto state = synchronised_state.lock();
-    auto max_buf = 0;
-    for (auto const& info : state->layers)
-        max_buf = std::max(max_buf, info.stream->buffers_ready_for_compositor(id));
-    return max_buf;
-}
-
 void ms::BasicSurface::consume(std::shared_ptr<MirEvent const> const& event)
 {
     observers->input_consumed(this, event);
@@ -778,7 +783,7 @@ mg::RenderableList ms::BasicSurface::generate_renderables(mc::CompositorID id) c
 {
     auto state = synchronised_state.lock();
     mg::RenderableList list;
-    
+
     if (state->clip_area)
     {
         if (!state->surface_rect.overlaps(state->clip_area.value()))
@@ -961,7 +966,7 @@ void mir::scene::BasicSurface::update_frame_posted_callbacks(State& state)
                 auto const logical_size = explicit_size ? explicit_size.value() : stream->stream_size();
                 if (auto const o = observers.lock())
                 {
-                    o->frame_posted(this, 1, geom::Rectangle{position, logical_size});
+                    o->frame_posted(this, geom::Rectangle{position, logical_size});
                 }
             });
     }
@@ -977,4 +982,61 @@ auto mir::scene::BasicSurface::content_size(State const& state) const -> geometr
 auto mir::scene::BasicSurface::content_top_left(State const& state) const -> geometry::Point
 {
     return state.surface_rect.top_left + geom::Displacement{state.margins.left, state.margins.top};
+}
+
+void mir::scene::BasicSurface::track_outputs()
+{
+    auto const state{synchronised_state.lock()};
+    std::set<mg::DisplayConfigurationOutputId> tracked;
+
+    display_config->for_each_output(
+        [&](mg::DisplayConfigurationOutput const& output)
+        {
+            if (output.valid() && output.used && output.extents().overlaps(state->surface_rect))
+            {
+                if (!tracked_outputs.contains(output.id))
+                {
+                    observers->entered_output(this, output.id);
+                }
+                tracked.insert(output.id);
+            }
+        });
+
+    // TODO: Once std::views::filter is properly supported across compilers, replace the
+    // creation of `untracked` with iteration over a filtered view of `tracked_outputs`
+    std::vector<mg::DisplayConfigurationOutputId> untracked;
+    std::ranges::set_difference(tracked_outputs, tracked, std::back_inserter(untracked));
+    std::ranges::for_each(untracked, [&](auto const& id) { observers->left_output(this, id); });
+
+    tracked_outputs = std::move(tracked);
+}
+
+void mir::scene::BasicSurface::linearised_track_outputs()
+{
+    thread_local bool const on_wayland_thread = []()
+        {
+            static size_t const max_thread_name_size = 16;
+            char thread_name[max_thread_name_size];
+            pthread_getname_np(pthread_self(), thread_name, sizeof thread_name);
+            return strcmp("Mir/Wayland", thread_name) == 0;
+        }();
+
+    if (on_wayland_thread)
+    {
+        // Since work in the Wayland thread is executed eagerly, the enter/leave
+        // notifications may race with the output tracking code in other threads.
+        // To prevent this, we wait for the work to be executed in a linearising
+        // executor.
+        std::latch latch{1};
+        linearising_executor.spawn([this, &latch]
+            {
+                track_outputs();
+                latch.count_down();
+            });
+        latch.wait();
+    }
+    else
+    {
+        track_outputs();
+    }
 }

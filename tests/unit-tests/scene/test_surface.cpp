@@ -20,6 +20,7 @@
 #include "src/server/report/null_report_factory.h"
 #include "mir/scene/surface_event_source.h"
 
+#include "mir/test/doubles/fake_display_configuration_observer_registrar.h"
 #include "mir/test/doubles/mock_event_sink.h"
 #include "mir/test/doubles/mock_buffer_stream.h"
 #include "mir/test/doubles/mock_input_surface.h"
@@ -56,7 +57,8 @@ struct SurfaceCreation : public ::testing::Test
             mir_pointer_unconfined,
             streams,
             nullptr /* cursor_image */,
-            report)
+            report,
+            std::make_shared<mtd::FakeDisplayConfigurationObserverRegistrar>())
     {
     }
 
@@ -69,9 +71,6 @@ struct SurfaceCreation : public ::testing::Test
         {
             notification_count++;
         };
-
-        ON_CALL(*mock_buffer_stream, acquire_client_buffer(_))
-            .WillByDefault(InvokeArgument<0>(&stub_buffer));
     }
 
     void TearDown() override
@@ -192,11 +191,10 @@ TEST_F(SurfaceCreation, consume_calls_send_event)
     using namespace testing;
 
     auto key_event = mev::make_key_event(
-        MirInputDeviceId(0), std::chrono::nanoseconds(0), std::vector<uint8_t>{},
+        MirInputDeviceId(0), std::chrono::nanoseconds(0),
         mir_keyboard_action_down, 0, 0, mir_input_event_modifier_none);
     auto touch_event = mev::make_touch_event(
-        MirInputDeviceId(0), std::chrono::nanoseconds(0), std::vector<uint8_t>{},
-        mir_input_event_modifier_none);
+        MirInputDeviceId(0), std::chrono::nanoseconds(0), mir_input_event_modifier_none);
     mev::add_touch(*touch_event, 0, mir_touch_action_down, mir_touch_tooltype_finger, 0, 0,
         0, 0, 0, 0);
 

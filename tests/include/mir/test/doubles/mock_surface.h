@@ -20,6 +20,7 @@
 #include "src/server/scene/basic_surface.h"
 #include "src/server/report/null_report_factory.h"
 #include "mock_buffer_stream.h"
+#include "mir/test/doubles/fake_display_configuration_observer_registrar.h"
 
 #include <gmock/gmock.h>
 
@@ -41,7 +42,8 @@ struct MockSurface : public scene::BasicSurface
             mir_pointer_unconfined,
             { { std::make_shared<testing::NiceMock<MockBufferStream>>(), {0, 0}, {} } },
             {},
-            mir::report::null_scene_report())
+            mir::report::null_scene_report(),
+            std::make_shared<FakeDisplayConfigurationObserverRegistrar>())
     {
         ON_CALL(*this, primary_buffer_stream())
             .WillByDefault(testing::Invoke([this]
@@ -85,6 +87,8 @@ struct MockSurface : public scene::BasicSurface
     MOCK_METHOD(void, set_streams, (std::list<scene::StreamInfo> const&));
 
     MOCK_METHOD(void, set_focus_state, (MirWindowFocusState));
+    MOCK_METHOD(std::string, application_id, (), (const));
+    MOCK_METHOD(std::weak_ptr<scene::Session>, session, (), (const));
 
     std::shared_ptr<MockBufferStream> const stream;
 };

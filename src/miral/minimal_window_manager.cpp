@@ -164,11 +164,11 @@ bool miral::MinimalWindowManager::handle_keyboard_event(MirKeyboardEvent const* 
             return true;
 
         case KEY_TAB:
-            self->application_selector.next();
+            self->application_selector.next(false);
             return true;
 
         case KEY_GRAVE:
-            tools.focus_next_within_application();
+            self->application_selector.next(true);
             return true;
 
         default:;
@@ -181,11 +181,11 @@ bool miral::MinimalWindowManager::handle_keyboard_event(MirKeyboardEvent const* 
         switch (mir_keyboard_event_scan_code(event))
         {
         case KEY_TAB:
-            self->application_selector.prev();
+            self->application_selector.prev(false);
             return true;
 
         case KEY_GRAVE:
-            tools.focus_prev_within_application();
+            self->application_selector.prev(true);
             return true;
 
         default:;
@@ -275,9 +275,9 @@ auto miral::MinimalWindowManager::confirm_inherited_move(WindowInfo const& windo
     return {window_info.window().top_left()+movement, window_info.window().size()};
 }
 
-void miral::MinimalWindowManager::advise_new_app(miral::ApplicationInfo& app_info)
+void miral::MinimalWindowManager::advise_new_window(miral::WindowInfo const& window_info)
 {
-    self->application_selector.advise_new_app(app_info.application());
+    self->application_selector.advise_new_window(window_info);
 }
 
 void miral::MinimalWindowManager::advise_focus_gained(WindowInfo const& window_info)
@@ -286,14 +286,17 @@ void miral::MinimalWindowManager::advise_focus_gained(WindowInfo const& window_i
     self->application_selector.advise_focus_gained(window_info);
 }
 
+void miral::MinimalWindowManager::advise_new_app(miral::ApplicationInfo&){}
+void miral::MinimalWindowManager::advise_delete_app(miral::ApplicationInfo const&){}
+
 void  miral::MinimalWindowManager::advise_focus_lost(const miral::WindowInfo &window_info)
 {
     self->application_selector.advise_focus_lost(window_info);
 }
 
-void miral::MinimalWindowManager::advise_delete_app(miral::ApplicationInfo const &app_info)
+void miral::MinimalWindowManager::advise_delete_window(miral::WindowInfo const& window_info)
 {
-    self->application_selector.advise_delete_app(app_info.application());
+    self->application_selector.advise_delete_window(window_info);
 }
 
 bool miral::MinimalWindowManager::Impl::prepare_for_gesture(
@@ -436,10 +439,9 @@ bool miral::MinimalWindowManager::Impl::handle_pointer_event(MirPointerEvent con
             shift_keys == gesture_shift_keys &&
             mir_pointer_event_button_state(event, pointer_gesture_button))
         {
-            if (gesture_window &&
-                tools.select_active_window(gesture_window) == gesture_window)
+            if (gesture_window)
             {
-                tools.drag_active_window(new_cursor - old_cursor);
+                tools.drag_window(gesture_window, new_cursor - old_cursor);
                 consumes_event = true;
             }
             else
@@ -510,8 +512,7 @@ bool miral::MinimalWindowManager::Impl::handle_touch_event(MirTouchEvent const* 
     case Gesture::touch_resizing:
         if (is_drag && gesture_shift_keys == shift_keys)
         {
-            if (gesture_window &&
-                tools.select_active_window(gesture_window) == gesture_window)
+            if (gesture_window)
             {
                 apply_resize_by(new_touch - old_touch);
                 consumes_event = true;
@@ -530,10 +531,9 @@ bool miral::MinimalWindowManager::Impl::handle_touch_event(MirTouchEvent const* 
     case Gesture::touch_moving:
         if (is_drag && gesture_shift_keys == shift_keys)
         {
-            if (gesture_window &&
-                tools.select_active_window(gesture_window) == gesture_window)
+            if (gesture_window)
             {
-                tools.drag_active_window(new_touch - old_touch);
+                tools.drag_window(gesture_window, new_touch - old_touch);
                 consumes_event = true;
             }
             else
@@ -565,8 +565,7 @@ bool miral::MinimalWindowManager::Impl::handle_touch_event(MirTouchEvent const* 
 
 void miral::MinimalWindowManager::Impl::apply_resize_by(Displacement movement)
 {
-    if (gesture_window &&
-        tools.select_active_window(gesture_window) == gesture_window)
+    if (gesture_window)
     {
         auto const top_left = resize_top_left;
         Rectangle const old_pos{top_left, resize_size};

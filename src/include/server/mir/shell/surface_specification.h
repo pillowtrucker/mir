@@ -52,13 +52,6 @@ struct StreamSpecification
 };
 auto operator==(StreamSpecification const& lhs, StreamSpecification const& rhs) -> bool;
 
-struct StreamCursor
-{
-    std::weak_ptr<frontend::BufferStream> stream;
-    geometry::Displacement hotspot;
-};
-auto operator==(StreamCursor const& lhs, StreamCursor const& rhs) -> bool;
-
 /// Specification of surface properties requested by client
 struct SurfaceSpecification
 {
@@ -110,6 +103,7 @@ struct SurfaceSpecification
 
     optional_value<MirPlacementGravity> attached_edges;
     optional_value<optional_value<geometry::Rectangle>> exclusive_rect;
+    optional_value<bool> ignore_exclusion_zones;
     optional_value<std::string> application_id;
 
     /// If to enable server-side decorations for this surface

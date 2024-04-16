@@ -257,7 +257,7 @@ void mf::WlrScreencopyV1DamageTracker::create_change_notifier()
         };
     change_notifier = std::make_shared<ms::SceneChangeNotification>(
         [callback](){ callback(std::nullopt); },
-        [callback=std::move(callback)](int, geom::Rectangle const& damage){ callback(damage); });
+        callback);
     surface_stack.add_observer(change_notifier);
 }
 
@@ -378,8 +378,7 @@ void mf::WlrScreencopyManagerV1::capture_output(
     (void)overlay_cursor;
     auto const& output_config = OutputGlobal::from_or_throw(output).current_config();
     auto const extents = output_config.extents();
-    auto const buffer_size = output_config.modes[output_config.current_mode_index].size;
-    new WlrScreencopyFrameV1{frame, this, ctx, {output, extents, buffer_size}};
+    new WlrScreencopyFrameV1{frame, this, ctx, {output, extents, extents.size}};
 }
 
 void mf::WlrScreencopyManagerV1::capture_output_region(
@@ -393,8 +392,7 @@ void mf::WlrScreencopyManagerV1::capture_output_region(
     auto const& output_config = OutputGlobal::from_or_throw(output).current_config();
     auto const extents = output_config.extents();
     auto const intersection = intersection_of({{x, y}, {width, height}}, extents);
-    auto const output_size = output_config.modes[output_config.current_mode_index].size;
-    auto const buffer_size = translate_and_scale(intersection, extents, {{}, output_size}).size;
+    auto const buffer_size = translate_and_scale(intersection, extents, {{}, extents.size}).size;
     new WlrScreencopyFrameV1{frame, this, ctx, {output, intersection, buffer_size}};
 }
 

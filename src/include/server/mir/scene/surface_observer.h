@@ -22,6 +22,7 @@
 
 #include "mir/input/input_reception_mode.h"
 #include "mir/geometry/rectangle.h"
+#include "mir/graphics/display_configuration.h"
 
 #include <glm/glm.hpp>
 #include <string>
@@ -48,7 +49,7 @@ public:
     virtual void moved_to(Surface const* surf, geometry::Point const& top_left) = 0;
     virtual void hidden_set_to(Surface const* surf, bool hide) = 0;
     /// damage is given in surface-local logical coordinates
-    virtual void frame_posted(Surface const* surf, int frames_available, geometry::Rectangle const& damage) = 0;
+    virtual void frame_posted(Surface const* surf, geometry::Rectangle const& damage) = 0;
     virtual void alpha_set_to(Surface const* surf, float alpha) = 0;
     virtual void orientation_set_to(Surface const* surf, MirOrientation orientation) = 0;
     virtual void transformation_set_to(Surface const* surf, glm::mat4 const& t) = 0;
@@ -61,6 +62,8 @@ public:
     virtual void input_consumed(Surface const* surf, std::shared_ptr<MirEvent const> const& event) = 0;
     virtual void application_id_set_to(Surface const* surf, std::string const& application_id) = 0;
     virtual void depth_layer_set_to(Surface const* surf, MirDepthLayer depth_layer) = 0;
+    virtual void entered_output(Surface const* surf, graphics::DisplayConfigurationOutputId const& id) = 0;
+    virtual void left_output(Surface const* surf, graphics::DisplayConfigurationOutputId const& id) = 0;
 
 protected:
     SurfaceObserver() = default;

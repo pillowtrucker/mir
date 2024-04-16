@@ -1,4 +1,4 @@
-MIR_SERVER_2.15 {
+MIR_SERVER_2.17 {
  global:
   extern "C++" {
     VTT?for?mir::DefaultServerConfiguration;
@@ -23,7 +23,6 @@ MIR_SERVER_2.15 {
     mir::DefaultServerConfiguration::the_connector*;
     mir::DefaultServerConfiguration::the_connector_report*;
     mir::DefaultServerConfiguration::the_console_services*;
-    mir::DefaultServerConfiguration::the_cookie_authority*;
     mir::DefaultServerConfiguration::the_coordinate_translator*;
     mir::DefaultServerConfiguration::the_cursor*;
     mir::DefaultServerConfiguration::the_cursor_images*;
@@ -46,6 +45,7 @@ MIR_SERVER_2.15 {
     mir::DefaultServerConfiguration::the_host_connection*;
     mir::DefaultServerConfiguration::the_host_lifecycle_event_listener*;
     mir::DefaultServerConfiguration::the_idle_handler*;
+    mir::DefaultServerConfiguration::the_session_lock*;
     mir::DefaultServerConfiguration::the_idle_hub*;
     mir::DefaultServerConfiguration::the_input_device_hub*;
     mir::DefaultServerConfiguration::the_input_device_registry*;
@@ -127,7 +127,6 @@ MIR_SERVER_2.15 {
     mir::Server::open_wayland_client_socket*;
     mir::Server::override_the_application_not_responding_detector*;
     mir::Server::override_the_compositor*;
-    mir::Server::override_the_cookie_authority*;
     mir::Server::override_the_coordinate_translator*;
     mir::Server::override_the_cursor_images*;
     mir::Server::override_the_display_buffer_compositor_factory*;
@@ -173,6 +172,7 @@ MIR_SERVER_2.15 {
     mir::Server::the_logger*;
     mir::Server::the_main_loop*;
     mir::Server::the_persistent_surface_store*;
+    mir::Server::the_session_lock*;
     mir::Server::the_prompt_session_listener*;
     mir::Server::the_prompt_session_manager*;
     mir::Server::the_rendering_platforms*;
@@ -771,7 +771,6 @@ MIR_SERVER_2.15 {
     typeinfo?for?mir::shell::Shell;
     typeinfo?for?mir::shell::ShellReport;
     typeinfo?for?mir::shell::ShellWrapper;
-    typeinfo?for?mir::shell::StreamCursor;
     typeinfo?for?mir::shell::StreamSpecification;
     typeinfo?for?mir::shell::SurfaceAspectRatio;
     typeinfo?for?mir::shell::SurfaceInfo;
@@ -889,7 +888,6 @@ MIR_SERVER_2.15 {
     vtable?for?mir::shell::Shell;
     vtable?for?mir::shell::ShellReport;
     vtable?for?mir::shell::ShellWrapper;
-    vtable?for?mir::shell::StreamCursor;
     vtable?for?mir::shell::StreamSpecification;
     vtable?for?mir::shell::SurfaceAspectRatio;
     vtable?for?mir::shell::SurfaceInfo;

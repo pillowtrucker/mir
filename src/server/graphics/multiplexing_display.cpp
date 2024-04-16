@@ -15,11 +15,14 @@
  */
 
 #include "multiplexing_display.h"
+#include "multiplexing_hw_cursor.h"
 #include "mir/graphics/display_configuration.h"
 #include "mir/renderer/gl/context.h"
 #include "mir/output_type_names.h"
+#include "mir/log.h"
 
 #include <boost/throw_exception.hpp>
+#include <exception>
 #include <stdexcept>
 #include <sstream>
 #include <functional>
@@ -83,8 +86,12 @@ public:
                     output.current_format = mutable_output.current_format;
                     output.power_mode = mutable_output.power_mode;
                     output.orientation = mutable_output.orientation;
+                    output.scale = mutable_output.scale;
+                    output.form_factor = mutable_output.form_factor;
+                    // MirSubpixelArrangement is mistakenly non-const?
                     output.gamma = mutable_output.gamma;
                     output.custom_logical_size = mutable_output.custom_logical_size;
+                    output.custom_attribute = mutable_output.custom_attribute;
                 });
         }
     }
@@ -315,5 +322,21 @@ void mg::MultiplexingDisplay::resume()
 
 auto mg::MultiplexingDisplay::create_hardware_cursor() -> std::shared_ptr<Cursor>
 {
-    return {};
+    std::vector<Display*> platform_displays;
+    for (auto& display : displays)
+    {
+        platform_displays.push_back(display.get());
+    }
+    try
+    {
+        return std::make_shared<MultiplexingCursor>(platform_displays);
+    }
+    catch (std::exception const&)
+    {
+        mir::log(
+            mir::logging::Severity::informational,
+            "display",
+            "Failed to create hardware cursor");
+        return nullptr;
+    }
 }

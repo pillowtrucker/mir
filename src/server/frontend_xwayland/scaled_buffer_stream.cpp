@@ -15,7 +15,6 @@
  */
 
 #include "scaled_buffer_stream.h"
-#include "mir/log.h"
 
 namespace mf = mir::frontend;
 
@@ -36,19 +35,9 @@ void mf::ScaledBufferStream::set_frame_posted_callback(std::function<void(geomet
     inner->set_frame_posted_callback(callback);
 }
 
-void mf::ScaledBufferStream::with_most_recent_buffer_do(std::function<void(graphics::Buffer&)> const& exec)
-{
-    inner->with_most_recent_buffer_do(exec);
-}
-
 MirPixelFormat mf::ScaledBufferStream::pixel_format() const
 {
     return inner->pixel_format();
-}
-
-void mf::ScaledBufferStream::allow_framedropping(bool allow)
-{
-    inner->allow_framedropping(allow);
 }
 
 void mf::ScaledBufferStream::set_scale(float scale)
@@ -68,24 +57,8 @@ auto mf::ScaledBufferStream::stream_size() -> geometry::Size
     return inner->stream_size() * inv_scale;
 }
 
-auto mf::ScaledBufferStream::buffers_ready_for_compositor(void const* user_id) const -> int
-{
-    return inner->buffers_ready_for_compositor(user_id);
-}
-
-void mf::ScaledBufferStream::drop_old_buffers()
-{
-    inner->drop_old_buffers();
-}
-
 auto mf::ScaledBufferStream::has_submitted_buffer() const -> bool
 {
     return inner->has_submitted_buffer();
 }
-
-auto mf::ScaledBufferStream::framedropping() const -> bool
-{
-    return inner->framedropping();
-}
-
 

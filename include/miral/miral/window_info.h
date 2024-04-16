@@ -47,7 +47,11 @@ struct WindowInfo
 
     bool is_visible() const;
 
+    /// \deprecated Obsolete: Window::size() includes decorations
+    /// @{
+    [[deprecated("Obsolete: Window::size() includes decorations")]]
     static bool needs_titlebar(MirWindowType type);
+    /// @}
 
     void constrain_resize(mir::geometry::Point& requested_pos, mir::geometry::Size& requested_size) const;
 
@@ -115,6 +119,10 @@ struct WindowInfo
     /// Mir will try to avoid occluding the area covered by this rectangle (relative to the window)
     /// (only meaningful when the window is attached to an edge)
     auto exclusive_rect() const -> mir::optional_value<mir::geometry::Rectangle>;
+
+    /// Mir will ignore the exclusive_rects of other windows when this is set to true.
+    /// (only meaningful when the window is attached to an edge)
+    auto ignore_exclusion_zones() const -> bool;
 
     /// Mir will not render anything outside this rectangle
     auto clip_area() const -> mir::optional_value<mir::geometry::Rectangle>;
